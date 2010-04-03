@@ -62,7 +62,10 @@ class NullLogger(Logger):
    def __init__(self, url):
        pass
 
-   def _store(self, entry):
+   def success(self, *args, **kw):
+       pass
+
+   def error(self, *args, **kw):
        pass
 
 class FileLogger(Logger):
