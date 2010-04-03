@@ -12,7 +12,15 @@ DEFAULTCONFIG = dict(
     logstore='file:///dev/stdout',
     )
 
-class Logger(object):
+class UrlInitable(object):
+    '''
+    Base class for objects whose __init__ methods take a single
+    urlparse.SplitResult argument specifying all relevant parameters.
+    '''
+    def __init__(self, url):
+        pass
+
+class Logger(UrlInitable):
     '''
     Base class for logger objects
     '''
@@ -59,9 +67,6 @@ class NullLogger(Logger):
    '''
    Stub logger. Just throws entries away.
    '''
-   def __init__(self, url):
-       pass
-
    def success(self, *args, **kw):
        pass
 
@@ -79,7 +84,7 @@ class FileLogger(Logger):
        self.file.write('{0}\n'.format(entry))
        self.file.flush()
 
-class MongoStoreObject(object):
+class MongoStoreObject(UrlInitable):
     def __init__(self, url):
         '''
         Create a storage object connected to a MongoDB instance
@@ -88,9 +93,9 @@ class MongoStoreObject(object):
         port = url.port
         from pymongo import Connection
         self.conn = Connection(host=host, port=port)
-        self.dbid, self.collectionid = [i for i in url.path.split('/')][1:3]
-        self.db = self.conn[self.dbid]
-        self.collection = self.db[self.collectionid]
+        dbid, collectionid = [i for i in url.path.split('/')][1:3]
+        self.db = self.conn[dbid]
+        self.collection = self.db[collectionid]
 
 class MongoLogger(MongoStoreObject, Logger):
     '''
@@ -99,12 +104,10 @@ class MongoLogger(MongoStoreObject, Logger):
     def _store(self, entry):
         self.collection.insert(entry)
 
-class DifStore(object):
+class DifStore(UrlInitable):
     '''
     Abstract base class for DifStore objects.
     '''
-    def __init__(self):
-        raise NotImplementedError
     def __contains__(self, difs):
         raise NotImplementedError
     def add(self, difs):
@@ -129,7 +132,7 @@ class MongoDifStore(MongoStoreObject, DifStore):
     '''
     def __init__(self, url):
         MongoStoreObject.__init__(self, url)
-        self.collection.create_index(self.collectionid, unique=True)
+        self.collection.create_index('difs', unique=True)
 
     def __contains__(self, difs):
         '''
@@ -146,20 +149,17 @@ class MongoDifStore(MongoStoreObject, DifStore):
 
 class RequestItem(object):
     def __init__(self, json):
-        try:
-            self.id = json['id']
-            difs = json['difs']
-            tmp = []
-            for dif in difs:
-                type = dif.pop('type')
-                value = dif.pop('value')
-                if not (isinstance(type, str) and isinstance(value, str)):
-                    raise TypeError
-                if dif:
-                    raise KeyError('extra keys: {0}'.format(', '.join(dif.keys())))
-                tmp.append((('type', type), ('value', value)))
-        except KeyError as e:
-            raise KeyError('missing key: {0}'.format(e))
+        self.id = json['id']
+        difs = json['difs']
+        tmp = []
+        for dif in difs:
+            type = dif.pop('type')
+            value = dif.pop('value')
+            if not (isinstance(type, str) and isinstance(value, str)):
+                raise TypeError
+            if dif: # extra keys
+                raise ValueError
+            tmp.append((('type', type), ('value', value)))
         self.difs = tuple(sorted(tmp)) # canonicalize
 
 class RequestBody(object):
@@ -191,39 +191,31 @@ class SiCSDApp(object):
         self.db = db
         self.logger = logger
 
-    def accept_key(self, key):
-        return key in self.keys
-
     @wsgify
     def __call__(self, req):
+        def log_and_raise(error_msg, Exc):
+            self.logger.error(req, error_msg)
+            raise Exc(error_msg)
+
+        if req.method != 'POST':
+            log_and_raise('Only POST allowed', exc.HTTPMethodNotAllowed)
+
         try:
-            if req.method != 'POST':
-                error_msg = 'Only POST allowed'
-                self.logger.error(req, error_msg)
-                raise exc.HTTPMethodNotAllowed(error_msg)
-
-            try:
-                json = loads(req.body)
-            except ValueError as e:
-                self.logger.error(req, e.msg)
-                raise exc.HTTPBadRequest(e.msg)
-
+            json = loads(req.body)
             data = RequestBody(json)
-            if not self.accept_key(data.key):
-                error_msg = 'Unrecognized key'
-                self.logger.error(req, error_msg)
-                raise exc.HTTPBadRequest(error_msg)
-
-            uniques, duplicates = data.process(self.db)
-            results = [dict(id=i, result='unique') for i in uniques] + \
-                      [dict(id=i, result='duplicate') for i in duplicates]
-            resp_body = dict(key=data.key, results=results)
-            self.logger.success(req, resp_body, uniques, duplicates)
-            return Response(content_type='application/json', body=dumps(resp_body))
-
         except Exception as e:
-            self.logger.error(req, str(e))
-            raise exc.HTTPBadRequest(str(e))
+            log_and_raise(str(e), exc.HTTPBadRequest)
+
+        if data.key not in self.keys:
+            log_and_raise('Unrecognized key', exc.HTTPForbidden)
+
+        uniques, duplicates = data.process(self.db)
+        results = [dict(id=i, result='unique') for i in uniques] + \
+                  [dict(id=i, result='duplicate') for i in duplicates]
+        resp_body = dict(key=data.key, results=results)
+        self.logger.success(req, resp_body, uniques, duplicates)
+        return Response(content_type='application/json', body=dumps(resp_body))
+
 
 
 DIFSTORE_SCHEMA = {
@@ -237,41 +229,41 @@ LOGSTORE_SCHEMA = {
   'mongodb': MongoLogger,
   }
 
-def instance_from_url(url, schema):
-    if url is not None:
-        url = urlsplit(url)
-        Class = schema[url.scheme]
-        return Class(url)
-    return schema[None](None)
+def instance_from_config_url(config, setting, schema):
+    '''
+    Returns a new UrlInitable object designated by the given configuration,
+    setting, and schema.
+    '''
+    url = config.get(setting)
+    url = urlsplit(url) if url else None
+    scheme = url.scheme if url else None
+    Class = schema[scheme]
+    return Class(url)
 
 class ConfigError(Exception):
     pass
 
 def process_config(config):
-    for key in ('hostname', 'port', 'keys', 'difstore'):
-        if key not in config:
-            raise ConfigError('Config is missing {0}'.format(key))
+    '''
+    Validate the config dictionary and return a (DifStore, Logger) pair
+    specified by the configuration.
+    '''
+    for setting in ('hostname', 'port', 'keys', 'difstore'): # required
+        if setting not in config:
+            raise ConfigError('Config is missing setting: {0}'.format(setting))
     try:
-        config['port'] = int(config['port'])
-    except Exception as e:
-        raise ConfigError('port: {0}'.format(e))
-    try:
-        config['keys'] = set(config['keys'])
-    except Exception as e:
-        raise ConfigError('keys: {0}'.format(e))
-    try:
-        db = instance_from_url(config['difstore'], DIFSTORE_SCHEMA)
-    except Exception as e:
-        raise ConfigError('difstore: {0}'.format(e))
-    try:
-        logger = instance_from_url(config.get('logstore'), LOGSTORE_SCHEMA)
-    except Exception as e:
-        raise ConfigError('logstore: {0}'.format(e))
-
-    return db, logger
+        difstore = instance_from_config_url(config, 'difstore', DIFSTORE_SCHEMA)
+        logstore = instance_from_config_url(config, 'logstore', LOGSTORE_SCHEMA)
+        return difstore, logstore
+    except KeyError as e:
+        raise ConfigError('Unrecognized scheme: {0}'.format(e))
 
 
 if __name__ == '__main__':
+    def die(msg):
+        print(msg)
+        exit(1)
+
     from sys import argv
     if argv[1:]:
         configpath = argv[1]
@@ -280,24 +272,22 @@ if __name__ == '__main__':
             with open(configpath) as configfile:
                 config = load(configfile)
         except YAMLError:
-            print('Could not parse yaml')
-            exit(1)
+            die('Could not parse yaml')
         except IOError:
-            print('Could not open file {0}'.format(configpath))
-            exit(1)
+            die('Could not open file {0}'.format(configpath))
     else:
         config = DEFAULTCONFIG
 
     try:
         db, logger = process_config(config)
     except ConfigError as e:
-        print('Unexpected configuration: {0}'.format(e))
-        exit(1)
+        die('Config error: {0}'.format(e))
 
-    application = SiCSDApp(config['keys'], db, logger)
+    keys, hostname, port = [config[i] for i in ('keys', 'hostname', 'port')]
+    application = SiCSDApp(keys, db, logger)
     from wsgiref.simple_server import make_server
-    httpd = make_server(config['hostname'], config['port'], application)
-    print('Serving on port {0}'.format(config['port']))
+    httpd = make_server(hostname, port, application)
+    print('Serving on port {0}'.format(port))
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

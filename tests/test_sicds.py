@@ -89,7 +89,7 @@ TESTCASES = (
 
     TestCase(
         {'content': [{'id': 'id1', 'difs': [{'type': 'foo', 'value': 'bar'}]}]},
-        400,
+        403,
         key='badkey'
         ),
 
