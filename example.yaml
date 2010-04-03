@@ -2,16 +2,14 @@
 hostname: localhost
 port: 8080
 
-# list of keys to accept
+# list of acceptable keys
 keys:
   - sicds_test
   - ds8a7d8df7s9df7sd8f7s9d8f
 
-# difstore url
 difstore: tmp://  # in memory
 #difstore: mongodb://localhost:27017/sicds_test/difs
 
-# logstore url (no logging if not set)
-logstore: file:///dev/stdout
-#logstore: file:///usr/local/var/log/sicds_test/sicds.log
-#logstore: mongodb://localhost:27017/sicds_test/log
+logger: file:///dev/stdout
+#logger: file:///usr/local/var/log/sicds_test/sicds.log
+#logger: mongodb://localhost:27017/sicds_test/log

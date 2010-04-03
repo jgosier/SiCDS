@@ -9,16 +9,71 @@ DEFAULTCONFIG = dict(
     port=8080,
     keys=['sicds_test'],
     difstore='tmp://',  # in memory
-    logstore='file:///dev/stdout',
+    logger='file:///dev/stdout',
     )
 
 class UrlInitable(object):
     '''
-    Base class for objects whose __init__ methods take a single
+    Base class for objects whose __init__ methods take a context and a
     urlparse.SplitResult argument specifying all relevant parameters.
     '''
-    def __init__(self, url):
+    def __init__(self, ctx, url):
         pass
+
+class MongoStore(UrlInitable):
+    def __init__(self, ctx, url):
+        '''
+        Create a data store connected to a MongoDB instance
+        '''
+        host = url.hostname
+        port = url.port
+        self.conn = ctx.rsrc(SharedMongoConn, host=host, port=port)
+        dbid, collectionid = [i for i in url.path.split('/')][1:3]
+        self.db = self.conn[dbid]
+        self.collection = self.db[collectionid]
+
+class DifStore(UrlInitable):
+    '''
+    Abstract base class for DifStore objects.
+    '''
+    def __contains__(self, difs):
+        raise NotImplementedError
+
+    def add(self, difs):
+        raise NotImplementedError
+
+class TmpDifStore(DifStore):
+    '''
+    Stores difs in memory. Everything is lost when server restarts.
+    '''
+    def __init__(self, ctx, url):
+        self.db = set()
+
+    def __contains__(self, difs):
+        return difs in self.db
+
+    def add(self, difs):
+        self.db.add(difs)
+
+class MongoDifStore(MongoStore, DifStore):
+    '''
+    Stores difs in a MongoDB instance.
+    '''
+    def __init__(self, ctx, url):
+        MongoStore.__init__(self, ctx, url)
+        self.collection.create_index('difs', unique=True)
+
+    def __contains__(self, difs):
+        '''
+        Returns True iff difs is in the database.
+        '''
+        return bool(self.collection.find_one(dict(difs=difs)))
+
+    def add(self, difs):
+        '''
+        Adds a set of difs to the database.
+        '''
+        self.collection.insert(dict(difs=difs))
 
 class Logger(UrlInitable):
     '''
@@ -75,76 +130,20 @@ class NullLogger(Logger):
 
 class FileLogger(Logger):
    '''
-   Prints entries to the given file-like object.
+   Prints entries to the file-like object indicated by url.
    '''
-   def __init__(self, url):
-       self.file = open(url.path, 'a')
+   def __init__(self, ctx, url):
+       self.file = ctx.rsrc(SharedFd, url.path)
 
    def _store(self, entry):
        self.file.write('{0}\n'.format(entry))
-       self.file.flush()
 
-class MongoStoreObject(UrlInitable):
-    def __init__(self, url):
-        '''
-        Create a storage object connected to a MongoDB instance
-        '''
-        host = url.hostname
-        port = url.port
-        from pymongo import Connection
-        self.conn = Connection(host=host, port=port)
-        dbid, collectionid = [i for i in url.path.split('/')][1:3]
-        self.db = self.conn[dbid]
-        self.collection = self.db[collectionid]
-
-class MongoLogger(MongoStoreObject, Logger):
+class MongoLogger(MongoStore, Logger):
     '''
     Stores log entries in a MongoDB instance.
     '''
     def _store(self, entry):
         self.collection.insert(entry)
-
-class DifStore(UrlInitable):
-    '''
-    Abstract base class for DifStore objects.
-    '''
-    def __contains__(self, difs):
-        raise NotImplementedError
-    def add(self, difs):
-        raise NotImplementedError
-
-class TmpDifStore(DifStore):
-    '''
-    Stores difs in memory. Everything is lost when server restarts.
-    '''
-    def __init__(self, url):
-        self.db = set()
-
-    def __contains__(self, difs):
-        return difs in self.db
-
-    def add(self, difs):
-        self.db.add(difs)
-
-class MongoDifStore(MongoStoreObject, DifStore):
-    '''
-    Stores difs in a MongoDB instance.
-    '''
-    def __init__(self, url):
-        MongoStoreObject.__init__(self, url)
-        self.collection.create_index('difs', unique=True)
-
-    def __contains__(self, difs):
-        '''
-        Returns True iff difs is in the database.
-        '''
-        return bool(self.collection.find_one(dict(difs=difs)))
-
-    def add(self, difs):
-        '''
-        Adds a set of difs to the database.
-        '''
-        self.collection.insert(dict(difs=difs))
 
 
 class RequestItem(object):
@@ -180,15 +179,15 @@ class RequestBody(object):
 
 
 class SiCSDApp(object):
-    def __init__(self, keys, db, logger):
+    def __init__(self, keys, difstore, logger):
         '''
         Args:
             keys: an iterable of acceptable keys
-            db: a DifStore object that will store difs
-            logger: a Logger object that will store log entries
+            difstore: a DifStore object
+            logger: a Logger object
         '''
         self.keys = set(keys)
-        self.db = db
+        self.difstore = difstore
         self.logger = logger
 
     @wsgify
@@ -209,7 +208,7 @@ class SiCSDApp(object):
         if data.key not in self.keys:
             log_and_raise('Unrecognized key', exc.HTTPForbidden)
 
-        uniques, duplicates = data.process(self.db)
+        uniques, duplicates = data.process(self.difstore)
         results = [dict(id=i, result='unique') for i in uniques] + \
                   [dict(id=i, result='duplicate') for i in duplicates]
         resp_body = dict(key=data.key, results=results)
@@ -217,46 +216,93 @@ class SiCSDApp(object):
         return Response(content_type='application/json', body=dumps(resp_body))
 
 
-
 DIFSTORE_SCHEMA = {
   None: TmpDifStore,
   'tmp': TmpDifStore,
   'mongodb': MongoDifStore,
    }
-LOGSTORE_SCHEMA = {
+
+LOGGER_SCHEMA = {
   None: NullLogger,
   'file': FileLogger,
   'mongodb': MongoLogger,
   }
 
-def instance_from_config_url(config, setting, schema):
-    '''
-    Returns a new UrlInitable object designated by the given configuration,
-    setting, and schema.
-    '''
-    url = config.get(setting)
-    url = urlsplit(url) if url else None
-    scheme = url.scheme if url else None
-    Class = schema[scheme]
-    return Class(url)
-
 class ConfigError(Exception):
     pass
 
-def process_config(config):
+class Context(object):
+    def __init__(self, config):
+        '''
+        Validates the config dictionary (raises ConfigError if invalid) and
+        initializes the resources specified by the configuration.
+        '''
+        for setting in ('hostname', 'port', 'keys', 'difstore'): # required
+            if setting not in config:
+                raise ConfigError('Config is missing setting: {0}'.format(setting))
+        self.config = config
+        self._shared = dict()
+        try:
+            self.difstore = self._instance_from_url('difstore', DIFSTORE_SCHEMA)
+            self.logger = self._instance_from_url('logger', LOGGER_SCHEMA)
+        except KeyError as e:
+            raise ConfigError('Unrecognized scheme: {0}'.format(e))
+
+    def _instance_from_url(self, setting, schema):
+        '''
+        Returns a new UrlInitable object designated by the given configuration,
+        setting, and schema.
+        '''
+        url = self.config.get(setting)
+        url = urlsplit(url) if url else None
+        scheme = url.scheme if url else None
+        Class = schema[scheme]
+        return Class(self, url)
+
+    def rsrc(self, Class, *args, **kw):
+        key = (Class, args, tuple(kw.items()))
+        try:
+            return self._shared[key]
+        except KeyError:
+            ob = Class(*args, **kw).open()
+            self._shared[key] = ob
+            return ob
+
+    def __del__(self):
+        for rsrc in self._shared.values():
+            try:
+                rsrc.close()
+            except Exception as e:
+                print('Could not close resource: {0}'.format(rsrc))
+
+class SharedRsrc(object):
     '''
-    Validate the config dictionary and return a (DifStore, Logger) pair
-    specified by the configuration.
+    Abstract base class for shared resources.
     '''
-    for setting in ('hostname', 'port', 'keys', 'difstore'): # required
-        if setting not in config:
-            raise ConfigError('Config is missing setting: {0}'.format(setting))
-    try:
-        difstore = instance_from_config_url(config, 'difstore', DIFSTORE_SCHEMA)
-        logstore = instance_from_config_url(config, 'logstore', LOGSTORE_SCHEMA)
-        return difstore, logstore
-    except KeyError as e:
-        raise ConfigError('Unrecognized scheme: {0}'.format(e))
+    def open(self):
+        raise NotImplementedError
+
+    def close(self):
+        self.rsrc.close()
+
+class SharedFd(SharedRsrc):
+    def __init__(self, path, mode='a'):
+        self.path = path
+        self.mode = mode
+
+    def open(self):
+        self.rsrc = open(self.path, self.mode)
+        return self.rsrc
+
+class SharedMongoConn(SharedRsrc):
+    def __init__(self, host, port):
+        self.host = host
+        self.port = port
+
+    def open(self):
+        from pymongo import Connection
+        self.rsrc = Connection(host=self.host, port=self.port)
+        return self.rsrc
 
 
 if __name__ == '__main__':
@@ -279,12 +325,12 @@ if __name__ == '__main__':
         config = DEFAULTCONFIG
 
     try:
-        db, logger = process_config(config)
+        ctx = Context(config)
     except ConfigError as e:
         die('Config error: {0}'.format(e))
 
     keys, hostname, port = [config[i] for i in ('keys', 'hostname', 'port')]
-    application = SiCSDApp(keys, db, logger)
+    application = SiCSDApp(keys, ctx.difstore, ctx.logger)
     from wsgiref.simple_server import make_server
     httpd = make_server(hostname, port, application)
     print('Serving on port {0}'.format(port))
