@@ -1,0 +1,2 @@
+include example.yaml
+recursive-include docs *.rst *.txt

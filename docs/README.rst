@@ -8,8 +8,6 @@ Requirements
 
 - `Python <http://www.python.org/>`_ 2.6
 - `WebOb <http://pypi.python.org/pypi/WebOb>`_
-- `WSGIProxy <http://http://pypi.python.org/pypi/WSGIProxy>`_
-- `simplejson <http://pypi.python.org/pypi/simplejson>`_
 - `PyYAML <http://pypi.python.org/pypi/PyYAML>`_
 
 If no persistent storage is available, SiCDS can store data in memory.

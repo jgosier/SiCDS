@@ -1,15 +1,21 @@
-# server address
-hostname: localhost
+### SiCDS Example Configuration
+
+
+## server address
+host: localhost
 port: 8080
 
-# list of acceptable keys
+## clients must supply one of these keys to use the API
 keys:
-  - sicds_test
-  - ds8a7d8df7s9df7sd8f7s9d8f
+  - abracadabra
 
-difstore: tmp://  # in memory
+## where to store difs
+# in memory (will be lost on restart!)
+difstore: tmp://
+# MongoDB <http://www.mongodb.org/>
 #difstore: mongodb://localhost:27017/sicds_test/difs
 
+## where to log
 logger: file:///dev/stdout
-#logger: file:///usr/local/var/log/sicds_test/sicds.log
+#logger: file:///usr/local/var/log/sicds/sicds.log
 #logger: mongodb://localhost:27017/sicds_test/log
