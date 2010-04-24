@@ -2,24 +2,11 @@ from datetime import datetime
 from functools import wraps
 from sys import stdout
 
-def as_tuple(dif):
-    return (dif.type, dif.value)
+def as_tuples(difs):
+    return tuple(sorted((dif.type, dif.value) for dif in difs))
 
-def as_dict(dif):
-    return dif._mapping
-
-def as_tuples(method):
-    @wraps(method)
-    def wrapper(self, difs):
-        return method(self, tuple(as_tuple(dif) for dif in difs))
-    return wrapper
-
-def as_dicts(method):
-    @wraps(method)
-    def wrapper(self, difs):
-        return method(self, [as_dict(dif) for dif in difs])
-    return wrapper
-
+def uid(difs):
+    return hash(as_tuples(difs))
 
 class UrlInitable(object):
     '''
@@ -133,16 +120,27 @@ class TmpDifStore(BaseDifStore):
     def __init__(self, *args):
         self.db = set()
 
-    @as_tuples
     def __contains__(self, difs):
+        difs = as_tuples(difs)
         return difs in self.db
 
-    @as_tuples
     def add(self, difs):
+        difs = as_tuples(difs)
         self.db.add(difs)
 
     def clear(self):
         self.db.clear()
+
+class DocDifStore(BaseDifStore):
+    '''
+    Abstract base class for document-oriented stores such as CouchDB and
+    MongoDB.
+    '''
+    _KEY = 'difs'
+
+    @classmethod
+    def _as_doc(cls, difs):
+        return {cls._KEY: as_tuples(difs)}
 
 if __name__ == '__main__':
     import doctest

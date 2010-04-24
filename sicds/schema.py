@@ -227,29 +227,6 @@ def many(validator, uniq=False, atleast=None):
         return result
     return wrapper
 
-def sortedtuple(seqvalidator):
-    '''
-    Wraps a seqvalidator in a function that canonicalizes its output by
-    transforming it into a sorted tuple. The sorted part allows two lists of
-    the same elements in different order to compare equal. The tuple part
-    allows the result to be added to a set or dict.
-
-    >>> # schema for content uniquely identifiable by a set of ids:
-    >>> class Content(Schema):
-    ...     required = {'uids': sortedtuple(many(int))}
-
-    >>> seenbefore = set()
-    >>> c1 = Content({'uids': [1, 2]})
-    >>> seenbefore.add(c1.uids)
-    >>> c2 = Content({'uids': [2, 1]})
-    >>> c2.uids in seenbefore
-    True
-    '''
-    @wraps(seqvalidator)
-    def wrapper(iterable):
-        validated = seqvalidator(iterable)
-        return tuple(sorted(validated))
-    return wrapper
 
 if __name__ == '__main__':
     import doctest

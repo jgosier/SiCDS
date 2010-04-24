@@ -1,4 +1,4 @@
-from base import BaseDifStore, BaseLogger, UrlInitable, as_dicts, as_dict, as_tuple
+from base import DocDifStore, BaseLogger, UrlInitable, as_tuples, uid
 from string import digits, ascii_letters
 
 class CouchStore(UrlInitable):
@@ -17,18 +17,17 @@ class CouchStore(UrlInitable):
         self.server.create(self.dbid)
         self.db = self.server[self.dbid]
 
-class CouchDifStore(CouchStore, BaseDifStore):
+class CouchDifStore(CouchStore, DocDifStore):
     '''
     Stores difs in a CouchDB instance.
     '''
-    _KEY = 'difs'
     _VIEW_NAME = 'difs'
     _VIEW_CODE = '''
 function (doc) {{
   if (doc.{0})
-    emit(doc.{0});
+    emit(doc.{0}, null);
 }}
-'''.format(_KEY)
+'''.format(DocDifStore._KEY)
 
     def _bootstrap(self):
         CouchStore._bootstrap(self)
@@ -36,20 +35,20 @@ function (doc) {{
         self._view = ViewDefinition(self.ddocid, self._VIEW_NAME, self._VIEW_CODE)
         self._view.sync(self.db)
 
-    @as_dicts
     def __contains__(self, difs):
         '''
         Returns True iff difs is in the database.
         '''
-        return bool(list(self._view(self.db, startkey=difs, limit=1)))
+        difs = as_tuples(difs)
+        return bool(list(self._view(self.db, key=difs)))
 
     def add(self, difs):
         '''
         Adds a set of difs to the database.
         '''
-        doc = {self._KEY: [as_dict(dif) for dif in difs]}
-        # try python hash value (converted to a large base) as document id
-        docid = change_base(hash(tuple(as_tuple(dif) for dif in difs)))
+        doc = self._as_doc(difs)
+        # try python hash value of difs as docid
+        docid = change_base(uid(difs)) # use large base for shorter id
         if docid not in self.db:
             self.db[docid] = doc
         else:

@@ -6,13 +6,13 @@ from webob import Response, exc
 from webob.dec import wsgify
 
 from base import BaseLogger, FileLogger, NullLogger, BaseDifStore, TmpDifStore
-from schema import Schema, many, sortedtuple, t_str, t_uni
+from schema import Schema, many, t_str, t_uni
 
 class Dif(Schema):
     required = {'type': t_uni, 'value': t_uni}
 
 class DifCollection(Schema):
-    required = {'name': t_uni, 'difs': sortedtuple(many(Dif, atleast=1))}
+    required = {'name': t_uni, 'difs': many(Dif, atleast=1)}
 
 class ContentItem(Schema):
     required = {'id': t_uni, 'difcollections': many(DifCollection, atleast=1)}

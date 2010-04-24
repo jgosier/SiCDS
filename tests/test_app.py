@@ -17,6 +17,8 @@ TESTPORT = 8635
 def test_config(difstoreurl):
     return dict(port=TESTPORT, keys=[TESTKEY], difstore=difstoreurl, logger='null:')
 
+# test configs for all supported backends.
+# comment out any that aren't installed on your system.
 # warning: test data stores will be cleared every time tests are run
 # make sure these configs don't point to anything important!
 test_configs = (
@@ -87,13 +89,17 @@ c2 = make_coll()
 c3 = make_coll()
 i1 = make_item(difcollections=[c1, c2])
 i2 = make_item(difcollections=[c2, c3])
+i3 = make_item(difcollections=[c3])
 req2 = make_req(contentItems=[i1])
 req3 = make_req(contentItems=[i2])
+req4 = make_req(contentItems=[i3])
 res2_uniq = make_resp(req2, uniq=True)
 res3_dup = make_resp(req3, uniq=False)
+res4_dup = make_resp(req4, uniq=False)
 tc_uniq2 = TestCase(req2, res_body_expect=res2_uniq)
 tc_dup2 = TestCase(req3, res_body_expect=res3_dup)
-test_cases.extend((tc_uniq2, tc_dup2))
+tc_dup3 = TestCase(req4, res_body_expect=res4_dup)
+test_cases.extend((tc_uniq2, tc_dup2, tc_dup3))
 
 # check that various bad requests give error responses
 req_badkey = dict(req1, key='bad_key')
@@ -130,12 +136,11 @@ for config in test_configs:
     config = SiCDSConfig(config)
     config.difstore.clear()
     difstore_type = config.difstore.__class__.__name__
+    stdout.write('{0}:\t'.format(difstore_type))
     failures = []
     app = SiCDSApp(config.keys, config.difstore, config.logger)
     app = TestApp(app)
     for tc in test_cases:
-        stdout.write('.')
-        stdout.flush()
         resp = app.post('/', tc.req_body, status=tc.res_status_expect,
             expect_errors=tc.expect_errors, headers={
             'content-type': 'application/json'})
@@ -144,12 +149,16 @@ for config in test_configs:
             tc.res_body_got = resp.body
             nfailed += 1
             failures.append(tc)
+            stdout.write('F')
         else:
             npassed += 1
+            stdout.write('.')
+        stdout.flush()
+    stdout.write('\n')
     if failures:
         failures_per_config.append((difstore_type, failures))
 
-print('\n{0} tests passed, {1} tests failed.'.format(npassed, nfailed))
+print('\n{0} test(s) passed, {1} test(s) failed.'.format(npassed, nfailed))
 
 whitespace = compile('\s+')
 def indented(text, indent=' '*6, width=60, collapse_whitespace=True):
