@@ -62,15 +62,8 @@ def result_str(uniq):
     return SiCDSApp.RES_UNIQ if uniq else SiCDSApp.RES_DUP
 
 def make_resp(req, uniq=True):
-    if uniq in (True, False):
-        # set all results to uniq
-        results = [dict(id=coll['id'], result=result_str(uniq))
-            for coll in req['contentItems']]
-    else:
-        # uniq is a mapping specifying results per id
-        results = [dict(id=id, result=result_str(result))
-            for (id, result) in uniq.iteritems()]
-
+    results = [dict(id=coll['id'], result=result_str(uniq))
+        for coll in req['contentItems']]
     return dumps({'key': req['key'], 'results': results})
 
 test_cases = []
