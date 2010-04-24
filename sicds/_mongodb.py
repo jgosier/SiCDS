@@ -1,4 +1,4 @@
-from base import BaseDifStore, BaseLogger, UrlInitable
+from base import BaseDifStore, BaseLogger, UrlInitable, as_dicts
 
 class MongoStore(UrlInitable):
     def __init__(self, url):
@@ -24,21 +24,19 @@ class MongoDifStore(MongoStore, BaseDifStore):
         MongoStore.__init__(self, url)
         self.collection.ensure_index(self._KEY, unique=True)
 
-    @staticmethod
-    def _sleep(difs):
-        return [dif._mapping for dif in difs]
-
+    @as_dicts
     def __contains__(self, difs):
         '''
         Returns True iff difs is in the database.
         '''
-        return bool(self.collection.find_one({self._KEY: self._sleep(difs)}))
+        return bool(self.collection.find_one({self._KEY: difs}))
 
+    @as_dicts
     def add(self, difs):
         '''
         Adds a set of difs to the database.
         '''
-        self.collection.insert({self._KEY: self._sleep(difs)})
+        self.collection.insert({self._KEY: difs})
 
     def clear(self):
         self.db.drop_collection(self.collection)

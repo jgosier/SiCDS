@@ -1,5 +1,25 @@
 from datetime import datetime
+from functools import wraps
 from sys import stdout
+
+def as_tuple(dif):
+    return (dif.type, dif.value)
+
+def as_dict(dif):
+    return dif._mapping
+
+def as_tuples(method):
+    @wraps(method)
+    def wrapper(self, difs):
+        return method(self, tuple(as_tuple(dif) for dif in difs))
+    return wrapper
+
+def as_dicts(method):
+    @wraps(method)
+    def wrapper(self, difs):
+        return method(self, [as_dict(dif) for dif in difs])
+    return wrapper
+
 
 class UrlInitable(object):
     '''
@@ -113,15 +133,13 @@ class TmpDifStore(BaseDifStore):
     def __init__(self, *args):
         self.db = set()
 
-    @staticmethod
-    def _sleep(difs):
-        return tuple((dif.type, dif.value) for dif in difs)
-
+    @as_tuples
     def __contains__(self, difs):
-        return self._sleep(difs) in self.db
+        return difs in self.db
 
+    @as_tuples
     def add(self, difs):
-        self.db.add(self._sleep(difs))
+        self.db.add(difs)
 
     def clear(self):
         self.db.clear()

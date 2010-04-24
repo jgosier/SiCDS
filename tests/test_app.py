@@ -66,21 +66,36 @@ def make_resp(req, uniq=True):
             for coll in req['contentItems']]
     else:
         # uniq is a mapping specifying results per id
-        results = [dict(id=id, result=result_str(uniq))
+        results = [dict(id=id, result=result_str(result))
             for (id, result) in uniq.iteritems()]
 
     return dumps({'key': req['key'], 'results': results})
 
 test_cases = []
 
+# check that duplication identification works as expected
 req1 = make_req()
-res1_uniq = make_resp(req1)
+res1_uniq = make_resp(req1, uniq=True)
 res1_dup = make_resp(req1, uniq=False)
 
 tc_uniq = TestCase(req1, res_body_expect=res1_uniq)
 tc_dup = TestCase(req1, res_body_expect=res1_dup)
 test_cases.extend((tc_uniq, tc_dup))
 
+c1 = make_coll()
+c2 = make_coll()
+c3 = make_coll()
+i1 = make_item(difcollections=[c1, c2])
+i2 = make_item(difcollections=[c2, c3])
+req2 = make_req(contentItems=[i1])
+req3 = make_req(contentItems=[i2])
+res2_uniq = make_resp(req2, uniq=True)
+res3_dup = make_resp(req3, uniq=False)
+tc_uniq2 = TestCase(req2, res_body_expect=res2_uniq)
+tc_dup2 = TestCase(req3, res_body_expect=res3_dup)
+test_cases.extend((tc_uniq2, tc_dup2))
+
+# check that various bad requests give error responses
 req_badkey = dict(req1, key='bad_key')
 tc_badkey = TestCase(req_badkey,
     res_status_expect=SiCDSApp.X_UNRECOGNIZED_KEY().status_int,

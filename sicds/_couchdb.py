@@ -1,4 +1,5 @@
-from base import BaseDifStore, BaseLogger, UrlInitable
+from base import BaseDifStore, BaseLogger, UrlInitable, as_dicts, as_dict, as_tuple
+from string import digits, ascii_letters
 
 class CouchStore(UrlInitable):
     def __init__(self, url):
@@ -35,21 +36,25 @@ function (doc) {{
         self._view = ViewDefinition(self.ddocid, self._VIEW_NAME, self._VIEW_CODE)
         self._view.sync(self.db)
 
-    @staticmethod
-    def _sleep(difs):
-        return [dif._mapping for dif in difs]
-
+    @as_dicts
     def __contains__(self, difs):
         '''
         Returns True iff difs is in the database.
         '''
-        return bool(list(self._view(self.db, startkey=self._sleep(difs), limit=1)))
+        return bool(list(self._view(self.db, startkey=difs, limit=1)))
 
     def add(self, difs):
         '''
         Adds a set of difs to the database.
         '''
-        self.db.save({self._KEY: self._sleep(difs)})
+        doc = {self._KEY: [as_dict(dif) for dif in difs]}
+        # try python hash value (converted to a large base) as document id
+        docid = change_base(hash(tuple(as_tuple(dif) for dif in difs)))
+        if docid not in self.db:
+            self.db[docid] = doc
+        else:
+            # let couch assign the id (will be much longer)
+            self.db.save(doc)
 
     def clear(self):
         if self.dbid in self.server:
@@ -62,3 +67,37 @@ class CouchLogger(CouchStore, BaseLogger):
     '''
     def _store(self, entry):
         self.db.save(entry)
+
+def change_base(x, charset=digits + ascii_letters, base=None):
+    '''
+    Returns ``x`` in base ``base`` using digits from ``charset``. With
+    ``base=None`` base will be set to ``len(charset)`` resulting in the
+    shortest possible string for the given charset.
+
+    >>> max32 = 2**32 - 1
+    >>> change_base(max32, base=16)
+    'ffffffff'
+    >>> change_base(max32)
+    '4GFfc3'
+
+    '''
+    if x == 0:
+        return '0'
+    sign = -1 if x < 0 else 1
+    x *= sign
+    digits = []
+    if base is None:
+        base = len(charset)
+    else:
+        charset = charset[:base]
+    while x:
+        digits.append(charset[x % base])
+        x /= base
+    if sign < 0:
+        digits.append('-')
+    digits.reverse()
+    return ''.join(digits)
+
+if __name__ == '__main__':
+    import doctest
+    doctest.testmod(optionflags=doctest.ELLIPSIS)
