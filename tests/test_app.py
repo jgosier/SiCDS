@@ -68,15 +68,20 @@ def make_resp(req, uniq=True):
 
 test_cases = []
 
-# check that duplication identification works as expected
+# test that duplication identification works as expected
+# first time we see an item it should be unique,
+# subsequent times it should be duplicate
 req1 = make_req()
 res1_uniq = make_resp(req1, uniq=True)
 res1_dup = make_resp(req1, uniq=False)
-
 tc_uniq = TestCase(req1, res_body_expect=res1_uniq)
 tc_dup = TestCase(req1, res_body_expect=res1_dup)
 test_cases.extend((tc_uniq, tc_dup))
 
+# test multi-collection identification
+# if we see an item with multiple collections, each of which we haven't seen
+# before, it should be unique. if we see an item with multiple collections
+# at least one of which we've seen before, it should be duplicate
 c1 = make_coll()
 c2 = make_coll()
 c3 = make_coll()
@@ -93,6 +98,21 @@ tc_uniq2 = TestCase(req2, res_body_expect=res2_uniq)
 tc_dup2 = TestCase(req3, res_body_expect=res3_dup)
 tc_dup3 = TestCase(req4, res_body_expect=res4_dup)
 test_cases.extend((tc_uniq2, tc_dup2, tc_dup3))
+
+# test that order of difs does not matter
+d1 = make_dif()
+d2 = make_dif()
+c12 = make_coll(difs=[d1, d2])
+c21 = make_coll(difs=[d2, d1])
+i12 = make_item(difcollections=[c12])
+i21 = make_item(difcollections=[c21])
+req12 = make_req(contentItems=[i12])
+req21 = make_req(contentItems=[i21])
+res12_uniq = make_resp(req12, uniq=True)
+res21_dup = make_resp(req21, uniq=False)
+tc_uniq12 = TestCase(req12, res_body_expect=res12_uniq)
+tc_dup21 = TestCase(req21, res_body_expect=res21_dup)
+test_cases.extend((tc_uniq12, tc_dup21))
 
 # check that various bad requests give error responses
 req_badkey = dict(req1, key='bad_key')
