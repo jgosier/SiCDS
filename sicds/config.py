@@ -1,3 +1,4 @@
+from _couchdb import CouchDifStore, CouchLogger
 from _mongodb import MongoDifStore, MongoLogger
 from base import TmpDifStore, TmpLogger, NullLogger, FileLogger, StdOutLogger, UrlInitable
 from configexc import UnknownUrlScheme, UrlInitFailure
@@ -19,6 +20,7 @@ DEFAULTCONFIG = dict(
 DIFSTORES = {
     None: TmpDifStore, # default if not specified
     'tmp': TmpDifStore,
+    'couchdb': CouchDifStore,
     'mongodb': MongoDifStore,
     }
 
@@ -27,6 +29,7 @@ LOGGERS = {
     'tmp': TmpLogger,
     'null': NullLogger,
     'file': FileLogger,
+    'couchdb': CouchLogger,
     'mongodb': MongoLogger,
     }
 

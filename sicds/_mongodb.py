@@ -10,7 +10,7 @@ class MongoStore(UrlInitable):
         host = url.hostname
         port = url.port
         self.conn = Connection(host=host, port=port)
-        self.dbid, self.collectionid = [i for i in url.path.split('/')][1:3]
+        self.dbid, self.collectionid = url.path.split('/')[1:3]
         self.db = self.conn[self.dbid]
         self.collection = self.db[self.collectionid]
 

@@ -21,6 +21,7 @@ def test_config(difstoreurl):
 # make sure these configs don't point to anything important!
 test_configs = (
     test_config('tmp:'),
+    test_config('couchdb://localhost:5984/sicds_test/difs'),
     test_config('mongodb://localhost:27017/sicds_test/difs'),
     )
 
