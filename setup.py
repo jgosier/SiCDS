@@ -19,6 +19,10 @@ setup(name='SiCDS',
           'PyYAML',
           'WebOb',
           ],
+      extras_require = {
+          'CouchDB': ["CouchDB==0.7"],
+          'MongoDB': ["pymongo==1.6"],
+          },
       entry_points=dict(
           console_scripts=[
               'sicdsapp = sicds.app:main'
