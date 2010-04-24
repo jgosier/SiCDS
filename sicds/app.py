@@ -52,7 +52,7 @@ class SiCDSApp(object):
     REQMAXBYTES = 1024
 
     #: error messages and exceptions
-    E_REQ_TOO_LARGE = 'Max request size is {0}'.format(REQMAXBYTES)
+    E_REQ_TOO_LARGE = 'Max request size is {0} bytes'.format(REQMAXBYTES)
     X_REQ_TOO_LARGE = exc.HTTPRequestEntityTooLarge
     E_METHOD_NOT_ALLOWED = 'Only POST allowed'
     X_METHOD_NOT_ALLOWED = exc.HTTPMethodNotAllowed
@@ -62,7 +62,7 @@ class SiCDSApp(object):
     X_BAD_REQ = exc.HTTPBadRequest
 
     RES_UNIQ = 'unique'
-    RES_DUPE = 'duplicate'
+    RES_DUP = 'duplicate'
 
     def __init__(self, keys, difstore, logger):
         '''
@@ -95,20 +95,20 @@ class SiCDSApp(object):
         if data.key not in self.keys:
             _log_and_raise(self.E_UNRECOGNIZED_KEY, self.X_UNRECOGNIZED_KEY)
 
-        uniq, dupe = self._process(data.contentItems)
+        uniq, dup = self._process(data.contentItems)
         results = [dict(id=i, result=self.RES_UNIQ) for i in uniq] + \
-                  [dict(id=i, result=self.RES_DUPE) for i in dupe]
+                  [dict(id=i, result=self.RES_DUP) for i in dup]
         resp_body = dict(key=data.key, results=results)
-        self.logger.success(req, resp_body, uniq, dupe)
+        self.logger.success(req, resp_body, uniq, dup)
         return Response(content_type='application/json', body=dumps(resp_body))
 
     def _process(self, items):
         uniqitems = []
-        dupeitems = []
+        dupitems = []
         for item in items:
             uniq = True
             for collection in item.difcollections:
-                difs = tuple((d.type, d.value) for d in collection.difs)
+                difs = collection.difs
                 if difs in self.difstore:
                     uniq = False
                 else:
@@ -116,8 +116,8 @@ class SiCDSApp(object):
             if uniq:
                 uniqitems.append(item.id)
             else:
-                dupeitems.append(item.id)
-        return uniqitems, dupeitems
+                dupitems.append(item.id)
+        return uniqitems, dupitems
 
 def main():
     from config import SiCDSConfig, DEFAULTCONFIG

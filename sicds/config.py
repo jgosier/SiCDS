@@ -1,5 +1,6 @@
 from _mongodb import MongoDifStore, MongoLogger
-from base import TmpDifStore, TmpLogger, FileLogger, StdOutLogger, UrlInitable
+from base import TmpDifStore, TmpLogger, NullLogger, FileLogger, StdOutLogger, UrlInitable
+from configexc import UnknownUrlScheme, UrlInitFailure
 from schema import Schema, SchemaError, many, t_str, withdefault
 
 from urlparse import urlsplit
@@ -11,7 +12,7 @@ DEFAULTCONFIG = dict(
     host=DEFAULTHOST,
     port=DEFAULTPORT,
     keys=[DEFAULTKEY],
-    difstore='tmp://',
+    difstore='tmp:',
     logger='file:///dev/stdout',
     )
 
@@ -24,13 +25,10 @@ DIFSTORES = {
 LOGGERS = {
     None: StdOutLogger, # default if not specified
     'tmp': TmpLogger,
+    'null': NullLogger,
     'file': FileLogger,
     'mongodb': MongoLogger,
     }
-
-class ConfigError(SchemaError): pass
-class UnknownUrlScheme(ConfigError): pass
-class UrlInitFailure(ConfigError): pass
 
 def _instance_from_url(urlscheme2type):
     '''

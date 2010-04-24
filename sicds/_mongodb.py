@@ -24,17 +24,21 @@ class MongoDifStore(MongoStore, BaseDifStore):
         MongoStore.__init__(self, url)
         self.collection.ensure_index(self._KEY, unique=True)
 
+    @staticmethod
+    def _sleep(difs):
+        return [dif._mapping for dif in difs]
+
     def __contains__(self, difs):
         '''
         Returns True iff difs is in the database.
         '''
-        return bool(self.collection.find_one({self._KEY: difs}))
+        return bool(self.collection.find_one({self._KEY: self._sleep(difs)}))
 
     def add(self, difs):
         '''
         Adds a set of difs to the database.
         '''
-        self.collection.insert({self._KEY: difs})
+        self.collection.insert({self._KEY: self._sleep(difs)})
 
     def clear(self):
         self.db.drop_collection(self.collection)

@@ -13,35 +13,33 @@ class BaseLogger(UrlInitable):
     '''
     Abstract base class for logger objects.
     '''
-    def success(self, req, resp, uniques, duplicates):
+    def success(self, req, resp, uniq, dup):
         '''
-        Add an entry to the log for a successful request.
+        Adds an entry to the log for a successful request.
 
-        Args:
-            req: the Request object
-            resp: the body of the response
-            uniques: list of ids that were reported as unique
-            duplicates: list of ids that were reported as duplicates
+        :param req: the :class:`webob.Request` object
+        :param resp: the body of the response
+        :param uniq: list of ids reported as unique
+        :param dup: list of ids reported as duplicates
         '''
-        self._log(req, True, response=resp, uniques=uniques, duplicates=duplicates)
+        self._log(req, True, response=resp, unique=uniq, duplicate=dup)
 
     def error(self, req, error_msg):
         '''
-        Add an entry to the log for an unsuccessful request.
+        Adds an entry to the log for an unsuccessful request.
 
-        Args:
-            req: the Request object
-            error_msg: (string) the error message sent to the client
+        :param req: the :class:`webob.Request` object
+        :param error_msg: the error message sent to the client
         '''
         self._log(req, False, error_msg=error_msg)
 
     def _log(self, req, success, **kw):
-        '''Add an entry to the log.
+        '''
+        Adds an entry to the log.
 
-        Args:
-            req: the Request object
-            success: whether the request was successful
-            kw: optional additional fields to add
+        :param req: the :class:`webob.Request` object
+        :param success: whether the request was successful
+        :param kw: optional additional fields to add
         '''
         entry = dict(
             timestamp=datetime.utcnow().isoformat(),
@@ -68,7 +66,7 @@ class NullLogger(BaseLogger):
 class TmpLogger(BaseLogger):
     '''
     Stores log entries in memory.
-    Everything is lost when the object is destroyed!
+    Everything is lost when the object is destroyed.
     '''
     def __init__(self, *args):
         self._entries = []
@@ -110,19 +108,24 @@ class BaseDifStore(UrlInitable):
 class TmpDifStore(BaseDifStore):
     '''
     Stores difs in memory.
-    Everything is lost when the object is destroyed!
-
-        >>> tmp = TmpDifStore()
-
+    Everything is lost when the object is destroyed.
     '''
     def __init__(self, *args):
         self.db = set()
 
+    @staticmethod
+    def _sleep(difs):
+        return tuple((dif.type, dif.value) for dif in difs)
+
     def __contains__(self, difs):
-        return difs in self.db
+        return self._sleep(difs) in self.db
 
     def add(self, difs):
-        self.db.add(difs)
+        self.db.add(self._sleep(difs))
 
     def clear(self):
         self.db.clear()
+
+if __name__ == '__main__':
+    import doctest
+    doctest.testmod(optionflags=doctest.ELLIPSIS)

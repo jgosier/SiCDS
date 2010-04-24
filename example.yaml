@@ -11,7 +11,7 @@ keys:
 
 ## where to store difs
 # in memory (will be lost on restart!)
-difstore: tmp://
+difstore: tmp:
 # MongoDB <http://www.mongodb.org/>
 #difstore: mongodb://localhost:27017/sicds_test/difs
 

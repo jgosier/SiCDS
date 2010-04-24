@@ -1,3 +1,4 @@
+from configexc import UrlInitFailure
 from functools import wraps
 from itertools import chain
 
@@ -107,18 +108,23 @@ class Schema(object):
     def __init__(self, mapping):
         self._mapping = dict(mapping) # copy initial config
 
+        def validate(validator, value):
+            try:
+                return validator(value)
+            except EmptyField:
+                raise EmptyField(fieldname)
+            except UrlInitFailure:
+                raise UrlInitFailure(value)
+            except:
+                raise InvalidField(fieldname, value)
+
         for fieldname, validator in self.required.iteritems():
             try:
                 value = mapping.pop(fieldname)
             except KeyError:
                 raise MissingField(fieldname)
-            try:
-                value = validator(value)
-            except EmptyField:
-                raise EmptyField(fieldname)
-            except:
-                raise InvalidField(fieldname, value)
-
+            else:
+                value = validate(validator, value)
             setattr(self, fieldname, value)
 
         for fieldname, validator in self.optional.iteritems():
@@ -127,13 +133,7 @@ class Schema(object):
             except KeyError:
                 value = validator() # no args for default value
             else:
-                try:
-                    value = validator(value)
-                except EmptyField:
-                    raise EmptyField(fieldname)
-                except:
-                    raise InvalidField(fieldname, value)
-
+                value = validate(validator, value)
             setattr(self, fieldname, value)
 
         if mapping:
