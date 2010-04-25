@@ -19,11 +19,11 @@
 # Boston, MA  02110-1301
 # USA
 
+from functools import partial
+from itertools import count
 from json import dumps, loads
 from pprint import pformat
 from re import compile
-from random import sample
-from string import ascii_lowercase
 from sys import stdout
 from webtest import TestApp
 
@@ -46,20 +46,23 @@ test_configs = (
     test_config('mongodb://localhost:27017/sicds_test/difs'),
     )
 
-def rand_str(chars=ascii_lowercase, length=7):
-    return ''.join(sample(chars, length))
+def next_str(prefix, counter):
+    return '{0}{1}'.format(prefix, counter.next())
 
 def make_req(key=TESTKEY, contentItems=[{}]):
     return dict(key=key, contentItems=[make_item(**i) for i in contentItems])
 
-def make_item(id=None, difcollections=[{}]):
-    return dict(id=id or rand_str(), difcollections=[make_coll(**c) for c in difcollections])
+def make_item(id=None, difcollections=[{}], next_item=partial(next_str, 'item', count())):
+    return dict(id=id or next_item(), difcollections=[make_coll(**c) for c in difcollections])
 
-def make_coll(name=None, difs=[{}]):
-    return dict(name=name or rand_str(), difs=[make_dif(**d) for d in difs])
+def make_coll(name=None, difs=[{}], next_coll=partial(next_str, 'collection', count())):
+    return dict(name=name or next_coll(), difs=[make_dif(**d) for d in difs])
 
-def make_dif(type=None, value=None):
-    return dict(type=type or rand_str(), value=value or rand_str())
+def make_dif(type=None, value=None,
+        next_type=partial(next_str, 'type', count()),
+        next_val=partial(next_str, 'value', count()),
+        ):
+    return dict(type=type or next_type(), value=value or next_val())
 
 class TestCase(object):
     '''
