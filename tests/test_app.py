@@ -49,7 +49,8 @@ class TestCase(object):
 
     Random data will be generated where ``reqdata`` lacks it.
     '''
-    def __init__(self, reqdata, res_status_expect=200, res_body_expect=''):
+    def __init__(self, desc, reqdata, res_status_expect=200, res_body_expect=''):
+        self.desc = desc
         self.req_body = dumps(reqdata)
         self.res_status_expect = res_status_expect
         self.res_body_expect = res_body_expect
@@ -74,8 +75,8 @@ test_cases = []
 req1 = make_req()
 res1_uniq = make_resp(req1, uniq=True)
 res1_dup = make_resp(req1, uniq=False)
-tc_uniq = TestCase(req1, res_body_expect=res1_uniq)
-tc_dup = TestCase(req1, res_body_expect=res1_dup)
+tc_uniq = TestCase('item1 unique', req1, res_body_expect=res1_uniq)
+tc_dup = TestCase('item1 now duplicate', req1, res_body_expect=res1_dup)
 test_cases.extend((tc_uniq, tc_dup))
 
 # test multi-collection identification
@@ -94,9 +95,9 @@ req4 = make_req(contentItems=[i3])
 res2_uniq = make_resp(req2, uniq=True)
 res3_dup = make_resp(req3, uniq=False)
 res4_dup = make_resp(req4, uniq=False)
-tc_uniq2 = TestCase(req2, res_body_expect=res2_uniq)
-tc_dup2 = TestCase(req3, res_body_expect=res3_dup)
-tc_dup3 = TestCase(req4, res_body_expect=res4_dup)
+tc_uniq2 = TestCase('[c1, c2] collections unique', req2, res_body_expect=res2_uniq)
+tc_dup2 = TestCase('[c2, c3] collections duplicate', req3, res_body_expect=res3_dup)
+tc_dup3 = TestCase('[c3] collection duplicate', req4, res_body_expect=res4_dup)
 test_cases.extend((tc_uniq2, tc_dup2, tc_dup3))
 
 # test that order of difs does not matter
@@ -110,33 +111,35 @@ req12 = make_req(contentItems=[i12])
 req21 = make_req(contentItems=[i21])
 res12_uniq = make_resp(req12, uniq=True)
 res21_dup = make_resp(req21, uniq=False)
-tc_uniq12 = TestCase(req12, res_body_expect=res12_uniq)
-tc_dup21 = TestCase(req21, res_body_expect=res21_dup)
+tc_uniq12 = TestCase('[dif1, dif2] unique',
+    req12, res_body_expect=res12_uniq)
+tc_dup21 = TestCase('[dif2, dif1] duplicate (order does not matter)',
+    req21, res_body_expect=res21_dup)
 test_cases.extend((tc_uniq12, tc_dup21))
 
 # check that various bad requests give error responses
 req_badkey = dict(req1, key='bad_key')
-tc_badkey = TestCase(req_badkey,
+tc_badkey = TestCase('reject bad key', req_badkey,
     res_status_expect=SiCDSApp.X_UNRECOGNIZED_KEY().status_int,
     res_body_expect=SiCDSApp.E_UNRECOGNIZED_KEY,
     )
 test_cases.append(tc_badkey)
 
-tc_missing_fields = TestCase({},
+tc_missing_fields = TestCase('reject missing fields', {},
     res_status_expect=SiCDSApp.X_BAD_REQ().status_int, 
     res_body_expect=SiCDSApp.E_BAD_REQ,
     )
 test_cases.append(tc_missing_fields)
 
 req_extra_fields = dict(make_req(), extra='extra')
-tc_extra_fields = TestCase(req_extra_fields,
+tc_extra_fields = TestCase('reject extra fields', req_extra_fields,
     res_status_expect=SiCDSApp.X_BAD_REQ().status_int, 
     res_body_expect=SiCDSApp.E_BAD_REQ,
     )
 test_cases.append(tc_extra_fields)
 
 req_too_large = {'too_large': ' '*SiCDSApp.REQMAXBYTES}
-tc_too_large = TestCase(req_too_large,
+tc_too_large = TestCase('reject too large', req_too_large,
     res_status_expect=SiCDSApp.X_REQ_TOO_LARGE().status_int, 
     res_body_expect=SiCDSApp.E_REQ_TOO_LARGE,
     )
@@ -179,12 +182,14 @@ def indented(text, indent=' '*6, width=60, collapse_whitespace=True):
         text = ' '.join(whitespace.split(text))
     return '\n'.join((indent + text[i:i+width] for i in range(0, len(text), width)))
 
-if failures_per_config:
+if nfailed:
     print('\nFailure summary:')
     for fs in failures_per_config:
         print('\n  For {0}:'.format(fs[0]))
         for tc in fs[1]:
-            print('\n    request:')
+            print('\n    test:')
+            print('      {0}'.format(tc.desc))
+            print('    request:')
             print(indented(tc.req_body, collapse_whitespace=False))
             print('    expected response:')
             print(indented(tc.res_body_expect))

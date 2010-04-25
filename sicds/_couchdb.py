@@ -1,4 +1,4 @@
-from base import DocDifStore, BaseLogger, UrlInitable, as_tuples, uid
+from base import DocDifStore, BaseLogger, UrlInitable, as_tuples, difhash
 from string import digits, ascii_letters
 
 class CouchStore(UrlInitable):
@@ -39,7 +39,7 @@ function (doc) {{
         '''
         Returns True iff difs is in the database.
         '''
-        difs = as_tuples(difs)
+        difs = self.sleep_func(difs)
         return bool(list(self._view(self.db, key=difs)))
 
     def add(self, difs):
@@ -47,8 +47,9 @@ function (doc) {{
         Adds a set of difs to the database.
         '''
         doc = self._as_doc(difs)
-        # try python hash value of difs as docid
-        docid = change_base(uid(difs)) # use large base for shorter id
+        # try generating a docid based on python hash value of difs
+        docid = difhash(difs)
+        docid = change_base(docid) # use large base for shorter id
         if docid not in self.db:
             self.db[docid] = doc
         else:

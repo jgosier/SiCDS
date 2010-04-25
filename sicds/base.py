@@ -3,9 +3,19 @@ from functools import wraps
 from sys import stdout
 
 def as_tuples(difs):
-    return tuple(sorted((dif.type, dif.value) for dif in difs))
+    '''
+    Serializes an iterable of :class:`sicds.app.Dif` objects into a canonical
+    representation as a sorted tuple of ``(('type', 'some_type'), ('value',
+    'some_value'))`` pairs.
+    '''
+    return tuple(sorted((('type', dif.type), ('value', dif.value))
+        for dif in difs))
 
-def uid(difs):
+def difhash(difs):
+    '''
+    Produces a unique hash value for a set of :class:`sicds.app.Dif`s based on
+    its canonical representation.
+    '''
     return hash(as_tuples(difs))
 
 class UrlInitable(object):
@@ -136,11 +146,15 @@ class DocDifStore(BaseDifStore):
     Abstract base class for document-oriented stores such as CouchDB and
     MongoDB.
     '''
+    #: the key in the document objects that maps to the difs
     _KEY = 'difs'
+
+    #: the function that serializes dif objects for storage
+    sleep_func = staticmethod(as_tuples)
 
     @classmethod
     def _as_doc(cls, difs):
-        return {cls._KEY: as_tuples(difs)}
+        return {cls._KEY: cls.sleep_func(difs)}
 
 if __name__ == '__main__':
     import doctest
