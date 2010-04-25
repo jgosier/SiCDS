@@ -83,20 +83,27 @@ class SiCDSApp(object):
     RES_UNIQ = 'unique'
     RES_DUP = 'duplicate'
 
-    def __init__(self, keys, difstore, logger):
+    def __init__(self, keys, difstore, loggers):
         '''
         :param keys: clients must supply a key in this iterable to use the API
         :param difstore: a :class:`BaseDifStore` implementation
-        :param logger: a :class:`BaseLogger` implementation
+        :param loggers: a list of :class:`BaseLogger` implementations
         '''
         self.keys = set(keys)
         self.difstore = difstore
-        self.logger = logger
+        self.loggers = loggers
+
+    def _log(self, success, *args, **kw):
+        for logger in self.loggers:
+            if success:
+                logger.success(*args, **kw)
+            else:
+                logger.error(*args, **kw)
 
     @wsgify
     def __call__(self, req):
         def _log_and_raise(error_msg, Exc):
-            self.logger.error(req, error_msg)
+            self._log(False, req, error_msg)
             raise Exc(error_msg)
 
         if req.method != 'POST':
@@ -118,7 +125,7 @@ class SiCDSApp(object):
         results = [dict(id=i, result=self.RES_UNIQ) for i in uniq] + \
                   [dict(id=i, result=self.RES_DUP) for i in dup]
         resp_body = dict(key=data.key, results=results)
-        self.logger.success(req, resp_body, uniq, dup)
+        self._log(True, req, resp_body, uniq, dup)
         return Response(content_type='application/json', body=dumps(resp_body))
 
     def _process(self, items):
@@ -164,7 +171,7 @@ def main():
         print('Warning: Using default configuration. Data will not be persisted.')
 
     config = SiCDSConfig(config)
-    app = SiCDSApp(config.keys, config.difstore, config.logger)
+    app = SiCDSApp(config.keys, config.difstore, config.loggers)
     from wsgiref.simple_server import make_server
     httpd = make_server(config.host, config.port, app)
     print('Serving on port {0}'.format(config.port))

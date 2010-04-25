@@ -34,7 +34,7 @@ TESTKEY = 'sicds_test'
 TESTPORT = 8635
 
 def test_config(difstoreurl):
-    return dict(port=TESTPORT, keys=[TESTKEY], difstore=difstoreurl, logger='null:')
+    return dict(port=TESTPORT, keys=[TESTKEY], difstore=difstoreurl, loggers=['null:'])
 
 # test configs for all supported backends.
 # comment out any that aren't installed on your system.
@@ -173,7 +173,7 @@ for config in test_configs:
     difstore_type = config.difstore.__class__.__name__
     stdout.write('{0}:\t'.format(difstore_type))
     failures = []
-    app = SiCDSApp(config.keys, config.difstore, config.logger)
+    app = SiCDSApp(config.keys, config.difstore, config.loggers)
     app = TestApp(app)
     for tc in test_cases:
         resp = app.post('/', tc.req_body, status=tc.res_status_expect,
