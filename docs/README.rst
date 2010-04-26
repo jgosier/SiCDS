@@ -6,7 +6,7 @@ This is a Python WSGI application.
 Requirements
 ------------
 
-- `Python <http://www.python.org/>`_ 2.6
+- `Python <http://www.python.org/>`_ 2.6.5
 - `WebOb <http://pypi.python.org/pypi/WebOb>`_
 - `PyYAML <http://pypi.python.org/pypi/PyYAML>`_
 

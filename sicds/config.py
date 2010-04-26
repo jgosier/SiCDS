@@ -62,6 +62,9 @@ def _instance_from_url(url, urlscheme2type):
         True
 
     '''
+    # assume urlsplit correctly handles novel schemes
+    # this requires at least Python 2.6.5!
+    # see http://bugs.python.org/issue7904
     url = urlsplit(url) if url else None
     scheme = url.scheme if url else None
     try:
