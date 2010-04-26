@@ -11,12 +11,12 @@ keys:
 
 ## where to store difs (can be any of the supported data stores)
 difstore: tmp: # in memory (will be lost on restart!)
-#difstore: couchdb://localhost:5984/sicds_test/difs
-#difstore: mongodb://localhost:27017/sicds_test/difs
+#difstore: couchdb://localhost:5984/sicds/difs
+#difstore: mongodb://localhost:27017/sicds/difs
 
 loggers:
   - file:///dev/stdout # also the default if none given
 # - null: # suppress logging
 # - file:///usr/local/var/log/sicds/sicds.log
-# - couchdb://localhost:5984/sicds_test/log
-# - mongodb://localhost:27017/sicds_test/log
+# - couchdb://localhost:5984/sicds/log
+# - mongodb://localhost:27017/sicds/log
