@@ -24,7 +24,6 @@ from urlparse import urlsplit
 from webob import Response, exc
 from webob.dec import wsgify
 
-from base import BaseLogger, FileLogger, NullLogger, BaseDifStore, TmpDifStore
 from schema import Schema, many, t_str, t_uni
 
 class Dif(Schema):

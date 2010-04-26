@@ -21,7 +21,6 @@
 from _couchdb import CouchDifStore, CouchLogger
 from _mongodb import MongoDifStore, MongoLogger
 from base import TmpDifStore, TmpLogger, NullLogger, FileLogger, StdOutLogger, UrlInitable
-from configexc import UnknownUrlScheme, UrlInitFailure
 from schema import Schema, SchemaError, many, t_str, withdefault
 from urlparse import urlsplit
 
@@ -51,6 +50,10 @@ LOGGERS = {
     'couchdb': CouchLogger,
     'mongodb': MongoLogger,
     }
+
+class ConfigError(SchemaError): pass
+class UnknownUrlScheme(ConfigError): pass
+class UrlInitFailure(ConfigError): pass
 
 def _instance_from_url(url, urlscheme2type):
     '''

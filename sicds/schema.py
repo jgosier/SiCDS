@@ -18,7 +18,6 @@
 # Boston, MA  02110-1301
 # USA
 
-from configexc import UrlInitFailure
 from functools import wraps
 from itertools import chain
 
@@ -133,8 +132,8 @@ class Schema(object):
                 return validator(value)
             except EmptyField:
                 raise EmptyField(fieldname)
-            except UrlInitFailure:
-                raise UrlInitFailure(value)
+            except SchemaError:
+                raise
             except:
                 raise InvalidField(fieldname, value)
 
