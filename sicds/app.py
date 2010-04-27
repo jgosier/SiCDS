@@ -26,6 +26,9 @@ from webob.dec import wsgify
 
 from schema import Schema, many, t_str, t_uni
 
+class KeyRegRequest(Schema):
+    required = {'superkey': t_str, 'newkey': t_str}
+
 class Dif(Schema):
     required = {'type': t_uni, 'value': t_uni}
 
@@ -36,7 +39,7 @@ class ContentItem(Schema):
     required = {'id': t_uni, 'difcollections': many(DifCollection, atleast=1)}
 
 class SiCDSRequest(Schema):
-    """
+    '''
     >>> req = {"key":"some_key","contentItems":[
     ...         {"id":"d87fds7f6s87f6sd78fsdf","difcollections":[
     ...           {"name":"collection1","difs":[
@@ -61,36 +64,116 @@ class SiCDSRequest(Schema):
       ...
     MissingField: ...
 
-    """
+    '''
     required = {'key': t_str, 'contentItems': many(ContentItem, atleast=1)}
 
 
 class SiCDSApp(object):
+    #: routes
+    R_IDENTIFY = '/'
+    R_REGISTER_KEY = '/register'
+
     #: max size of request body. bigger will be refused.
     REQMAXBYTES = 1024
 
     #: error messages and exceptions
+    E_NOT_FOUND = 'The requested URL was not found'
+    X_NOT_FOUND = exc.HTTPNotFound
+    X_REQ_TOO_LARGE = exc.HTTPRequestEntityTooLarge
     E_REQ_TOO_LARGE = 'Max request size is {0} bytes'.format(REQMAXBYTES)
     X_REQ_TOO_LARGE = exc.HTTPRequestEntityTooLarge
     E_METHOD_NOT_ALLOWED = 'Only POST allowed'
     X_METHOD_NOT_ALLOWED = exc.HTTPMethodNotAllowed
-    E_UNRECOGNIZED_KEY = 'Unrecognized key'
-    X_UNRECOGNIZED_KEY = exc.HTTPForbidden
+    E_UNAUTHORIZED_KEY = 'Unauthorized key'
+    X_UNAUTHORIZED_KEY = exc.HTTPForbidden
     E_BAD_REQ = 'Bad Request'
     X_BAD_REQ = exc.HTTPBadRequest
 
     RES_UNIQ = 'unique'
     RES_DUP = 'duplicate'
+    KEYREGOK = 'OK'
 
-    def __init__(self, keys, difstore, loggers):
+    def _register(self, req, json):
+        def _log_and_raise(error_msg, Exc):
+            self._log(False, req, error_msg)
+            raise Exc(error_msg)
+
+        try:
+            data = KeyRegRequest(json)
+        except Exception as e:
+            _log_and_raise('{0}: {1}: {2}'.format(
+                self.E_BAD_REQ, e.__class__.__name__, e),
+                self.X_BAD_REQ)
+
+        if data.superkey != self.superkey:
+            _log_and_raise(self.E_UNAUTHORIZED_KEY, self.X_UNAUTHORIZED_KEY)
+
+        try:
+            self.store.register(data.newkey)
+        except Exception as e:
+            _log_and_raise('{0}: {1}: {2}'.format(
+                self.E_BAD_REQ, e.__class__.__name__, e),
+                self.X_BAD_REQ)
+        self.keys.add(data.newkey)
+        return Response(body=self.KEYREGOK)
+
+    def _identify(self, req, json):
+        def _log_and_raise(error_msg, Exc):
+            self._log(False, req, error_msg)
+            raise Exc(error_msg)
+
+        try:
+            data = SiCDSRequest(json)
+        except Exception as e:
+            _log_and_raise('{0}: {1}: {2}'.format(
+                self.E_BAD_REQ, e.__class__.__name__, e),
+                self.X_BAD_REQ)
+
+        if data.key not in self.keys:
+            _log_and_raise(self.E_UNAUTHORIZED_KEY, self.X_UNAUTHORIZED_KEY)
+
+        uniq, dup = self._process(data.key, data.contentItems)
+        results = [dict(id=i, result=self.RES_UNIQ) for i in uniq] + \
+                  [dict(id=i, result=self.RES_DUP) for i in dup]
+        resp_body = dict(key=data.key, results=results)
+        self._log(True, req, resp_body, uniq, dup)
+        return Response(content_type='application/json', body=dumps(resp_body))
+
+    def _process(self, key, items):
+        uniqitems = []
+        dupitems = []
+        for item in items:
+            uniq = True
+            for collection in item.difcollections:
+                difs = collection.difs
+                if self.store.has(key, difs):
+                    uniq = False
+                else:
+                    self.store.add(key, difs)
+            if uniq:
+                uniqitems.append(item.id)
+            else:
+                dupitems.append(item.id)
+        return uniqitems, dupitems
+
+
+    _routes = {
+        R_IDENTIFY: _identify,
+        R_REGISTER_KEY: _register,
+        }
+
+    def __init__(self, keys, superkey, store, loggers):
         '''
         :param keys: clients must supply a key in this iterable to use the API
-        :param difstore: a :class:`BaseDifStore` implementation
+        :param superkey: new keys can be registered using this key
+        :param store:
         :param loggers: a list of :class:`BaseLogger` implementations
         '''
         self.keys = set(keys)
-        self.difstore = difstore
+        self.superkey = superkey
+        self.store = store
         self.loggers = loggers
+        self.store.ensure_keys(self.keys)
 
     def _log(self, success, *args, **kw):
         for logger in self.loggers:
@@ -105,44 +188,21 @@ class SiCDSApp(object):
             self._log(False, req, error_msg)
             raise Exc(error_msg)
 
+        if req.path_info not in self._routes:
+            _log_and_raise(self.E_NOT_FOUND, self.X_NOT_FOUND)
         if req.method != 'POST':
             _log_and_raise(self.E_METHOD_NOT_ALLOWED, self.X_METHOD_NOT_ALLOWED)
         if req.content_length > self.REQMAXBYTES:
             _log_and_raise(self.E_REQ_TOO_LARGE, self.X_REQ_TOO_LARGE)
         try:
             json = loads(req.body)
-            data = SiCDSRequest(json)
         except Exception as e:
             _log_and_raise('{0}: {1}: {2}'.format(
                 self.E_BAD_REQ, e.__class__.__name__, e),
                 self.X_BAD_REQ)
 
-        if data.key not in self.keys:
-            _log_and_raise(self.E_UNRECOGNIZED_KEY, self.X_UNRECOGNIZED_KEY)
-
-        uniq, dup = self._process(data.contentItems)
-        results = [dict(id=i, result=self.RES_UNIQ) for i in uniq] + \
-                  [dict(id=i, result=self.RES_DUP) for i in dup]
-        resp_body = dict(key=data.key, results=results)
-        self._log(True, req, resp_body, uniq, dup)
-        return Response(content_type='application/json', body=dumps(resp_body))
-
-    def _process(self, items):
-        uniqitems = []
-        dupitems = []
-        for item in items:
-            uniq = True
-            for collection in item.difcollections:
-                difs = collection.difs
-                if difs in self.difstore:
-                    uniq = False
-                else:
-                    self.difstore.add(difs)
-            if uniq:
-                uniqitems.append(item.id)
-            else:
-                dupitems.append(item.id)
-        return uniqitems, dupitems
+        handler = self._routes[req.path_info]
+        return handler(self, req, json)
 
 def main():
     from config import SiCDSConfig, DEFAULTCONFIG
@@ -170,7 +230,7 @@ def main():
         print('Warning: Using default configuration. Data will not be persisted.')
 
     config = SiCDSConfig(config)
-    app = SiCDSApp(config.keys, config.difstore, config.loggers)
+    app = SiCDSApp(config.keys, config.superkey, config.store, config.loggers)
     from wsgiref.simple_server import make_server
     httpd = make_server(config.host, config.port, app)
     print('Serving on port {0}'.format(config.port))

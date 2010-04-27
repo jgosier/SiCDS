@@ -30,11 +30,13 @@ from webtest import TestApp
 from sicds.app import SiCDSApp
 from sicds.config import SiCDSConfig
 
-TESTKEY = 'sicds_test'
+TESTKEY = 'sicds_test_key'
+TESTSUPERKEY = 'sicds_test_superkey'
 TESTPORT = 8635
 
-def test_config(difstoreurl):
-    return dict(port=TESTPORT, keys=[TESTKEY], difstore=difstoreurl, loggers=['null:'])
+def test_config(store):
+    return dict(port=TESTPORT, keys=[TESTKEY], superkey=TESTSUPERKEY,
+        store=store, loggers=['null:'])
 
 # test configs for all supported backends.
 # comment out any that aren't installed on your system.
@@ -42,8 +44,8 @@ def test_config(difstoreurl):
 # make sure these configs don't point to anything important!
 test_configs = (
     test_config('tmp:'),
-    test_config('couchdb://localhost:5984/sicds_test/difs'),
-    test_config('mongodb://localhost:27017/sicds_test/difs'),
+    test_config('couchdb://localhost:5984/sicds_test'),
+    #test_config('mongodb://localhost:27017/sicds_test'),
     )
 
 def next_str(prefix, counter):
@@ -71,10 +73,14 @@ class TestCase(object):
 
     Random data will be generated where ``reqdata`` lacks it.
     '''
-    def __init__(self, desc, reqdata, res_status_expect=200, res_body_expect=''):
+    def __init__(self, desc, reqdata, req_path=SiCDSApp.R_IDENTIFY,
+            res_status_expect=200, res_body_expect=''):
         self.desc = desc
+        self.req_path = req_path
         self.req_body = dumps(reqdata)
         self.res_status_expect = res_status_expect
+        if isinstance(res_body_expect, dict):
+            res_body_expect = dumps(res_body_expect)
         self.res_body_expect = res_body_expect
 
     @property
@@ -87,7 +93,7 @@ def result_str(uniq):
 def make_resp(req, uniq=True):
     results = [dict(id=coll['id'], result=result_str(uniq))
         for coll in req['contentItems']]
-    return dumps({'key': req['key'], 'results': results})
+    return {'key': req['key'], 'results': results}
 
 test_cases = []
 
@@ -139,11 +145,26 @@ tc_dup21 = TestCase('[dif2, dif1] duplicate (order does not matter)',
     req21, res_body_expect=res21_dup)
 test_cases.extend((tc_uniq12, tc_dup21))
 
+# test registering a new key
+NEWKEY = 'sicds_test_key2'
+req_keyreg = {'superkey': TESTSUPERKEY, 'newkey': NEWKEY}
+tc_keyreg = TestCase('register new key', req_keyreg,
+    req_path=SiCDSApp.R_REGISTER_KEY,
+    res_body_expect=SiCDSApp.KEYREGOK)
+test_cases.append(tc_keyreg)
+
+# existing content should look new to the client using the new key
+req1_newkey = dict(req1, key=NEWKEY)
+res1_newkey = dict(res1_uniq, key=NEWKEY)
+tc_newkey_uniq = TestCase('item1 unique to new client',
+    req1_newkey, res_body_expect=res1_newkey)
+test_cases.append(tc_newkey_uniq)
+
 # check that various bad requests give error responses
 req_badkey = dict(req1, key='bad_key')
 tc_badkey = TestCase('reject bad key', req_badkey,
-    res_status_expect=SiCDSApp.X_UNRECOGNIZED_KEY().status_int,
-    res_body_expect=SiCDSApp.E_UNRECOGNIZED_KEY,
+    res_status_expect=SiCDSApp.X_UNAUTHORIZED_KEY().status_int,
+    res_body_expect=SiCDSApp.E_UNAUTHORIZED_KEY,
     )
 test_cases.append(tc_badkey)
 
@@ -172,14 +193,14 @@ npassed = nfailed = 0
 failures_per_config = []
 for config in test_configs:
     config = SiCDSConfig(config)
-    config.difstore.clear()
-    difstore_type = config.difstore.__class__.__name__
-    stdout.write('{0}:\t'.format(difstore_type))
+    config.store.clear()
+    store_type = config.store.__class__.__name__
+    stdout.write('{0}:\t'.format(store_type))
     failures = []
-    app = SiCDSApp(config.keys, config.difstore, config.loggers)
+    app = SiCDSApp(config.keys, config.superkey, config.store, config.loggers)
     app = TestApp(app)
     for tc in test_cases:
-        resp = app.post('/', tc.req_body, status=tc.res_status_expect,
+        resp = app.post(tc.req_path, tc.req_body, status=tc.res_status_expect,
             expect_errors=tc.expect_errors, headers={
             'content-type': 'application/json'})
         if tc.res_body_expect not in resp:
@@ -194,7 +215,7 @@ for config in test_configs:
         stdout.flush()
     stdout.write('\n')
     if failures:
-        failures_per_config.append((difstore_type, failures))
+        failures_per_config.append((store_type, failures))
 
 print('\n{0} test(s) passed, {1} test(s) failed.'.format(npassed, nfailed))
 

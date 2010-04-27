@@ -3,20 +3,22 @@
 
 ## server address
 host: localhost
-port: 8080
+port: 8625
 
 ## clients must supply one of these keys to use the API
 keys:
   - abracadabra
 
-## where to store difs (can be any of the supported data stores)
-difstore: tmp: # in memory (will be lost on restart!)
-#difstore: couchdb://localhost:5984/sicds/difs
-#difstore: mongodb://localhost:27017/sicds/difs
+## new keys can be registered using this superkey
+superkey: simsalabim
+
+## backend for persistent storage
+store: tmp: # in memory (will be lost on restart!)
+#store: couchdb://localhost:5984/sicds
+#store: mongodb://localhost:27017/sicds
 
 loggers:
   - file:///dev/stdout # also the default if none given
 # - null: # suppress logging
-# - file:///usr/local/var/log/sicds/sicds.log
-# - couchdb://localhost:5984/sicds/log
-# - mongodb://localhost:27017/sicds/log
+# - couchdb://localhost:5984/sicds
+# - mongodb://localhost:27017/sicds

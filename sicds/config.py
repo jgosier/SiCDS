@@ -18,28 +18,37 @@
 # Boston, MA  02110-1301
 # USA
 
-from _couchdb import CouchDifStore, CouchLogger
-from _mongodb import MongoDifStore, MongoLogger
-from base import TmpDifStore, TmpLogger, NullLogger, FileLogger, StdOutLogger, UrlInitable
+from _couchdb import CouchStore#, CouchLogger
+#from _mongodb import MongoStore, MongoLogger
+from base import TmpStore, UrlInitable
+from loggers import TmpLogger, NullLogger, FileLogger, StdOutLogger
 from schema import Schema, SchemaError, many, t_str, withdefault
 from urlparse import urlsplit
 
-DEFAULTKEY = 'sicds_test'
+DEFAULTKEY = 'sicds_default_key'
+DEFAULTSUPERKEY = 'sicds_default_superkey'
 DEFAULTHOST = 'localhost'
-DEFAULTPORT = 8080
+DEFAULTPORT = 8625
 DEFAULTCONFIG = dict(
     host=DEFAULTHOST,
     port=DEFAULTPORT,
     keys=[DEFAULTKEY],
-    difstore='tmp:',
+    superkey=DEFAULTSUPERKEY,
+    store='tmp:',
     loggers=['file:///dev/stdout'],
     )
 
-DIFSTORES = {
-    None: TmpDifStore, # default if not specified
-    'tmp': TmpDifStore,
-    'couchdb': CouchDifStore,
-    'mongodb': MongoDifStore,
+#DIFSTORES = {
+#    None: TmpStore, # default if not specified
+#    'tmp': TmpStore,
+#    'couchdb': CouchStore,
+#    'mongodb': MongoStore,
+#    }
+
+STORES = {
+    None: TmpStore, # default if not specified
+    'tmp': TmpStore,
+    'couchdb': CouchStore,
     }
 
 LOGGERS = {
@@ -47,9 +56,14 @@ LOGGERS = {
     'tmp': TmpLogger,
     'null': NullLogger,
     'file': FileLogger,
-    'couchdb': CouchLogger,
-    'mongodb': MongoLogger,
+#    'couchdb': CouchLogger,
+#    'mongodb': MongoLogger,
     }
+
+#BACKENDS = {
+#    'couchdb': {'difstore': CouchStore, 'logger': CouchLogger},
+#    'mongodb': {'difstore': MongoStore, 'logger': MongoLogger},
+#    }
 
 class ConfigError(SchemaError): pass
 class UnknownUrlScheme(ConfigError): pass
@@ -75,13 +89,13 @@ def _instance_from_url(url, urlscheme2type):
             Class = urlscheme2type[scheme]
         except KeyError:
             raise UnknownUrlScheme(scheme)
-        assert issubclass(Class, UrlInitable)
+        #assert issubclass(Class, UrlInitable)
         return Class(url)
     except:
         raise UrlInitFailure(url) 
 
-def difstore_from_url(url):
-    return _instance_from_url(url, DIFSTORES)
+def store_from_url(url):
+    return _instance_from_url(url, STORES)
 
 def logger_from_url(url):
     return _instance_from_url(url, LOGGERS)
@@ -89,7 +103,8 @@ def logger_from_url(url):
 class SiCDSConfig(Schema):
     required = {
         'keys': many(t_str, atleast=1),
-        'difstore': difstore_from_url,
+        'superkey': t_str,
+        'store': store_from_url,
         }
     optional = {
         'host': withdefault(str, DEFAULTHOST),

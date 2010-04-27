@@ -18,24 +18,10 @@
 # Boston, MA  02110-1301
 # USA
 
-from datetime import datetime
-from sys import stdout
 
-def as_tuples(difs):
-    '''
-    Serializes an iterable of :class:`sicds.app.Dif` objects into a canonical
-    representation as a sorted tuple of ``(('type', 'some_type'), ('value',
-    'some_value'))`` pairs.
-    '''
-    return tuple(sorted((('type', dif.type), ('value', dif.value))
-        for dif in difs))
-
-def difhash(difs):
-    '''
-    Produces a unique hash value for a set of :class:`sicds.app.Dif`s based on
-    its canonical representation.
-    '''
-    return hash(as_tuples(difs))
+class StoreError(Exception): pass
+class UpdateFailed(StoreError): pass
+class NoSuchKey(StoreError): pass
 
 class UrlInitable(object):
     '''
@@ -45,135 +31,73 @@ class UrlInitable(object):
     def __init__(self, url):
         pass
 
-class BaseLogger(UrlInitable):
+class BaseStore(UrlInitable):
     '''
-    Abstract base class for logger objects.
+    Abstract base class for Store objects.
     '''
-    def success(self, req, resp, uniq, dup):
-        '''
-        Adds an entry to the log for a successful request.
-
-        :param req: the :class:`webob.Request` object
-        :param resp: the body of the response
-        :param uniq: list of ids reported as unique
-        :param dup: list of ids reported as duplicates
-        '''
-        self._log(req, True, response=resp, unique=uniq, duplicate=dup)
-
-    def error(self, req, error_msg):
-        '''
-        Adds an entry to the log for an unsuccessful request.
-
-        :param req: the :class:`webob.Request` object
-        :param error_msg: the error message sent to the client
-        '''
-        self._log(req, False, error_msg=error_msg)
-
-    def _log(self, req, success, **kw):
-        '''
-        Adds an entry to the log.
-
-        :param req: the :class:`webob.Request` object
-        :param success: whether the request was successful
-        :param kw: optional additional fields to add
-        '''
-        entry = dict(
-            timestamp=datetime.utcnow().isoformat(),
-            remote_addr=req.remote_addr,
-            req_body=req.body,
-            success=success,
-            **kw
-            )
-        self._store(entry)
-
-    def _store(self, entry):
+    def has(self, key, difs):
         raise NotImplementedError
 
-class NullLogger(BaseLogger):
-   '''
-   Stub logger. Just throws entries away.
-   '''
-   def success(self, *args, **kw):
-       pass
-
-   def error(self, *args, **kw):
-       pass
-
-class TmpLogger(BaseLogger):
-    '''
-    Stores log entries in memory.
-    Everything is lost when the object is destroyed.
-    '''
-    def __init__(self, *args):
-        self._entries = []
-
-    def _store(self, entry):
-        self._entries.append(entry)
-
-class FileLogger(BaseLogger):
-   '''
-   Opens a file at the path specified in ``url`` and logs entries to it.
-   '''
-   def __init__(self, url):
-       self.file = open(url.path, 'a')
-
-   def _store(self, entry):
-       self.file.write('{0}\n'.format(entry))
-
-class StdOutLogger(FileLogger):
-    '''
-    Logs to stdout.
-    '''
-    def __init__(self, *args):
-        self.file = stdout
-
-
-class BaseDifStore(UrlInitable):
-    '''
-    Abstract base class for DifStore objects.
-    '''
-    def __contains__(self, difs):
+    def add(self, key, difs):
         raise NotImplementedError
 
-    def add(self, difs):
+    def register(self, newkey):
+        self.ensure_keys((newkey,))
+
+    def ensure_keys(self, keys):
         raise NotImplementedError
 
     def clear(self):
         raise NotImplementedError
 
-class TmpDifStore(BaseDifStore):
+def as_tuples(difs):
+    return tuple(sorted((('type', d.type), ('value', d.value)) for d in difs))
+
+def serialize(key, difs):
+    '''
+    Serializes a key and an iterable of :class:`sicds.app.Dif` objects into a
+    canonical representation.
+    '''
+    return (('key', key), as_tuples(difs))
+
+class TmpStore(BaseStore):
     '''
     Stores difs in memory.
     Everything is lost when the object is destroyed.
     '''
     def __init__(self, *args):
-        self.db = set()
+        self.db = {}
 
-    def __contains__(self, difs):
+    def has(self, key, difs):
         difs = as_tuples(difs)
-        return difs in self.db
+        return difs in self.db[key]
 
-    def add(self, difs):
+    def add(self, key, difs):
         difs = as_tuples(difs)
-        self.db.add(difs)
+        self.db[key].add(difs)
+
+    def ensure_keys(self, keys):
+        for key in keys:
+            if key not in self.db:
+                self.db[key] = set()
 
     def clear(self):
         self.db.clear()
 
-class DocDifStore(BaseDifStore):
+class DocStore(BaseStore):
     '''
     Abstract base class for document-oriented stores such as CouchDB and
     MongoDB.
     '''
-    #: the key in the document objects that maps to the difs
-    _KEY = 'difs'
+    #: the key in the dif documents that maps to the value
+    kDIFS = 'difs_by_key'
 
-    #: the function that serializes dif objects for storage
-    sleep_func = staticmethod(as_tuples)
+    #: the key in the api key document that maps to the keys
+    kKEYS = 'keys'
 
     @classmethod
-    def _as_doc(cls, difs):
-        return {cls._KEY: cls.sleep_func(difs)}
+    def _as_doc(cls, key, difs):
+        return {cls.kDIFS: serialize(key, difs)}
 
 if __name__ == '__main__':
     import doctest

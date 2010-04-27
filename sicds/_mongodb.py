@@ -42,14 +42,14 @@ class MongoDifStore(MongoStore, DocDifStore):
         MongoStore.__init__(self, url)
         self.collection.ensure_index(self._KEY, unique=True)
 
-    def __contains__(self, difs):
+    def has(self, key, difs):
         '''
         Returns True iff difs is in the database.
         '''
         doc = self._as_doc(difs)
         return bool(self.collection.find_one(doc))
 
-    def add(self, difs):
+    def add(self, key, difs):
         '''
         Adds a set of difs to the database.
         '''
