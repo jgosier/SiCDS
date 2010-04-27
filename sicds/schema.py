@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # Copyright (C) 2010 Ushahidi Inc. <jon@ushahidi.com>,
 # Joshua Bronson <jabronson@gmail.com>, and contributors
 #
@@ -22,9 +23,9 @@ from functools import wraps
 from itertools import chain
 
 class SchemaError(Exception): pass
-class MissingField(SchemaError, KeyError): pass
-class InvalidField(SchemaError, TypeError): pass
-class EmptyField(SchemaError, ValueError): pass
+class RequiredField(SchemaError): pass
+class InvalidField(SchemaError): pass
+class EmptyField(SchemaError): pass
 class ExtraFields(SchemaError): pass
 
 class Schema(object):
@@ -44,24 +45,20 @@ class Schema(object):
         ...     required = {'last': str}
         ...     optional = {'first': str}
 
-        >>> class StreetAddress(Schema):
+        >>> class Address(Schema):
         ...     required = {'number': int, 'street': str}
-
-        >>> class CityStateZip(Schema):
-        ...     required = {'city': str, 'state': str, 'zip': str}
 
     Schemas are composable::
 
-        >>> class MailingAddress(Schema):
-        ...     required = {'name': Name, 'line1': StreetAddress,
-        ...                 'line2': CityStateZip}
+        >>> class ContactInfo(Schema):
+        ...     required = {'name': Name, 'address': Address}
 
     Let's test these out::
 
         >>> name = Name({'first': 'Homer'})
         Traceback (most recent call last):
           ...
-        MissingField: 'last'
+        RequiredField: last
 
         >>> name = Name({'first': 'Homer', 'last': 'Simpson', 'middle': 'J'})
         Traceback (most recent call last):
@@ -72,91 +69,170 @@ class Schema(object):
         >>> name
         <Name first=Homer last=Simpson>
 
-        >>> name = Name({'last': 'Simpson'}) # 'first' is optional
+    You can get or set fields through attribute access:
+
+        >>> name.first
+        'Homer'
+        >>> name.first = 'Lisa'
+        >>> name
+        <Name first=Lisa last=Simpson>
+
+    But only fields that are part of the schema::
+
+        >>> name.suffix = 'not part of the schema!'
+        Traceback (most recent call last):
+          ...
+        ExtraFields: suffix
+
+    You can delete fields too, but only if they're optional. This causes the
+    field to be reset to its default value::
+
+        >>> del name.first
         >>> name
         <Name first= last=Simpson>
+        >>> del name.last
+        Traceback (most recent call last):
+          ...
+        RequiredField: last
 
-    The mapping used to build the instance can be recovered::
+    Equivalence comparison works with other Schema instances and also dicts::
 
-        >>> name._mapping
-        {'last': 'Simpson'}
+        >>> name == Name({'last': 'Simpson'}) == {'last': 'Simpson'}
+        True
 
-        >>> line1 = StreetAddress({'number': 'abc', 'street': 'xyz'})
+    You can unwrap the mapping underpinning the instance like::
+
+        >>> name.unwrap
+        {...'last': 'Simpson'...}
+
+
+    Let's demonstrate invalid fields::
+
+        >>> addr = Address({'number': 'abc', 'street': 'xyz'})
         Traceback (most recent call last):
           ...
         InvalidField: ('number', 'abc')
 
-        >>> line1 = StreetAddress(
-        ...     {'number': '742', 'street': 'Evergreen Terrace'})
-        >>> line1.number, line1.street
-        (742, 'Evergreen Terrace')
+        >>> address = Address({'number': '742', 'street': 'Evergreen Terrace'})
+        >>> address
+        <Address number=742 street=Evergreen Terrace>
 
-    Note ``line1.number`` was processed as an ``int``. We'd probably want
-    better validators for state and zip, but for now any string is okay::
-
-        >>> line2 = CityStateZip(
-        ...     {'city': 'Springfield', 'state': '?', 'zip': '?'})
-
-    Now for a compound schema::
-
-        >>> address = MailingAddress({
-        ...     'name': name._mapping,
-        ...     'line1': line1._mapping,
-        ...     'line2': line2._mapping,
-        ...     })
-
-    Validated. You can verify the subschemas' mappings round-tripped::
-
-        >>> address.line2.city
-        'Springfield'
-
-    Here's an invalid compound schema::
-
-        >>> address = MailingAddress({
-        ...     'name': name._mapping,
-        ...     'line1': line1._mapping,
-        ...     'line2': CityStateZip({'invalid': 'data'}),
-        ...     })
+    Validation is triggered on setattr as well::
+        
+        >>> address.number = 'not a number'
         Traceback (most recent call last):
           ...
-        MissingField...
+        InvalidField: ('number', 'not a number')
+    
+    Now let's demonstrate the compound schema::
+
+        >>> ContactInfo({'name': {'last': 'Nahasapeemapetilon'}})
+        Traceback (most recent call last):
+          ...
+        RequiredField: address
+
+    Here's a valid one, using our already-validated instances::
+
+        >>> info = ContactInfo({'name': name, 'address': address})
+
+    You can descend into subschemas::
+
+        >>> info.address.number
+        742
+
+    And unwrapping the compound schema unwraps its subschemas::
+
+        >>> info.unwrap
+        {...'name': {...'last': 'Simpson'...}...}
+
+    The round-trip::
+
+        >>> ContactInfo(info.unwrap) == info
+        True
 
     '''
     required = {}
     optional = {}
+
+    @staticmethod
+    def _validate(field, validator, value):
+        try:
+            return validator(value)
+        except EmptyField:
+            raise EmptyField(field)
+        except SchemaError:
+            raise
+        except:
+            raise InvalidField(field, value)
+
     def __init__(self, mapping):
-        self._mapping = dict(mapping) # copy initial config
-
-        def validate(validator, value):
+        mapping = dict(mapping)
+        unwrapped = {}
+        for field, validator in chain(
+                self.required.iteritems(), self.optional.iteritems()):
             try:
-                return validator(value)
-            except EmptyField:
-                raise EmptyField(fieldname)
-            except SchemaError:
-                raise
-            except:
-                raise InvalidField(fieldname, value)
-
-        for fieldname, validator in self.required.iteritems():
-            try:
-                value = mapping.pop(fieldname)
+                value = mapping.pop(field)
             except KeyError:
-                raise MissingField(fieldname)
+                if field in self.required:
+                    raise RequiredField(field)
+                # field is optional, use default value
+                value = validator() # call with no args for default value
             else:
-                value = validate(validator, value)
-            setattr(self, fieldname, value)
-
-        for fieldname, validator in self.optional.iteritems():
-            try:
-                value = mapping.pop(fieldname)
-            except KeyError:
-                value = validator() # no args for default value
-            else:
-                value = validate(validator, value)
-            setattr(self, fieldname, value)
+                # check if it's already been validated into an expected Schema
+                if type(validator) == type(Schema) and \
+                        issubclass(validator, Schema) and \
+                        isinstance(value, validator):
+                    unwrapped[field] = value.unwrap
+                else:
+                    unwrapped[field] = value
+                    value = self._validate(field, validator, value)
+            object.__setattr__(self, field, value)
 
         if mapping:
             raise ExtraFields(mapping)
+
+        defaults = dict((field, validator()) for \
+            (field, validator) in self.optional.iteritems())
+        unwrapped = dict(defaults, **unwrapped)
+        object.__setattr__(self, '_defaults', defaults)
+        object.__setattr__(self, '_unwrapped', unwrapped)
+
+    def __setattr__(self, attr, value):
+        try:
+            validator = self.required[attr]
+        except KeyError:
+            try:
+                validator = self.optional[attr]
+            except KeyError:
+                raise ExtraFields(attr)
+        # check if it's already been validated into an expected Schema
+        if type(validator) == type(Schema) and \
+                issubclass(validator, Schema) and \
+                isinstance(value, validator):
+            self._unwrapped[attr] = value.unwrap
+        else:
+            validated = self._validate(attr, validator, value)
+            self._unwrapped[attr] = value
+        object.__setattr__(self, attr, validated)
+
+    def __delattr__(self, attr):
+        if attr in self.required:
+            raise RequiredField(attr)
+        default = self._defaults[attr]
+        self._unwrapped[attr] = default
+        object.__setattr__(self, attr, default)
+
+    @property
+    def unwrap(self):
+        return self._unwrapped
+
+    def __eq__(self, other):
+        if isinstance(other, Schema):
+            return self.unwrap == other.unwrap
+        if isinstance(other, dict):
+            withdefaults = dict(self._defaults, **other)
+            return self.unwrap == withdefaults
+        return False
 
     def __repr__(self):
         return '<{0} {1}>'.format(self.__class__.__name__,
