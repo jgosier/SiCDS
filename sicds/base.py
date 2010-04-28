@@ -41,8 +41,8 @@ class BaseStore(UrlInitable):
     def add(self, key, difs):
         raise NotImplementedError
 
-    def register(self, newkey):
-        self.ensure_keys((newkey,))
+    def register_key(self, newkey):
+        raise NotImplementedError
 
     def ensure_keys(self, keys):
         raise NotImplementedError
@@ -75,6 +75,12 @@ class TmpStore(BaseStore):
     def add(self, key, difs):
         difs = as_tuples(difs)
         self.db[key].add(difs)
+
+    def register_key(self, newkey):
+        if newkey in self.db:
+            return False
+        self.db[newkey] = set()
+        return True
 
     def ensure_keys(self, keys):
         for key in keys:

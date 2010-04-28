@@ -20,14 +20,21 @@
 # USA
 
 from json import loads, dumps
+from sicds.schema import Schema, InvalidField, many, t_str, t_uni
 from urlparse import urlsplit
 from webob import Response, exc
 from webob.dec import wsgify
 
-from schema import Schema, many, t_str, t_uni
-
 class KeyRegRequest(Schema):
     required = {'superkey': t_str, 'newkey': t_str}
+
+def v_keyregresult(registered):
+    if registered:
+        return 'registered'
+    return 'already registered'
+
+class KeyRegResponse(Schema):
+    required = {'key': t_str, 'registered': v_keyregresult}
 
 class Dif(Schema):
     required = {'type': t_uni, 'value': t_uni}
@@ -38,7 +45,7 @@ class DifCollection(Schema):
 class ContentItem(Schema):
     required = {'id': t_uni, 'difcollections': many(DifCollection, atleast=1)}
 
-class SiCDSRequest(Schema):
+class IDRequest(Schema):
     '''
     >>> req = {"key":"some_key","contentItems":[
     ...         {"id":"d87fds7f6s87f6sd78fsdf","difcollections":[
@@ -54,113 +61,34 @@ class SiCDSRequest(Schema):
     ...           }]
     ...         }]
     ...       }
-    >>> req = SiCDSRequest(req)
+    >>> req = IDRequest(req)
     >>> req
-    <SiCDSRequest ...>
+    <IDRequest ...>
     >>> req.key
     'some_key'
-    >>> SiCDSRequest({'fields': 'missing'})
+    >>> IDRequest({'fields': 'missing'})
     Traceback (most recent call last):
       ...
-    MissingField: ...
+    RequiredField: ...
 
     '''
     required = {'key': t_str, 'contentItems': many(ContentItem, atleast=1)}
 
+def v_idresult(uniq):
+    if uniq:
+        return 'unique'
+    return 'duplicate'
+
+class IDResult(Schema):
+    required = {'id': t_uni, 'result': v_idresult}
+
+class IDResponse(Schema):
+    required = {'key': t_str, 'results': many(IDResult, atleast=1)}
+
 
 class SiCDSApp(object):
-    #: routes
-    R_IDENTIFY = '/'
-    R_REGISTER_KEY = '/register'
-
     #: max size of request body. bigger will be refused.
     REQMAXBYTES = 1024
-
-    #: error messages and exceptions
-    E_NOT_FOUND = 'The requested URL was not found'
-    X_NOT_FOUND = exc.HTTPNotFound
-    X_REQ_TOO_LARGE = exc.HTTPRequestEntityTooLarge
-    E_REQ_TOO_LARGE = 'Max request size is {0} bytes'.format(REQMAXBYTES)
-    X_REQ_TOO_LARGE = exc.HTTPRequestEntityTooLarge
-    E_METHOD_NOT_ALLOWED = 'Only POST allowed'
-    X_METHOD_NOT_ALLOWED = exc.HTTPMethodNotAllowed
-    E_UNAUTHORIZED_KEY = 'Unauthorized key'
-    X_UNAUTHORIZED_KEY = exc.HTTPForbidden
-    E_BAD_REQ = 'Bad Request'
-    X_BAD_REQ = exc.HTTPBadRequest
-
-    RES_UNIQ = 'unique'
-    RES_DUP = 'duplicate'
-    KEYREGOK = 'OK'
-
-    def _register(self, req, json):
-        def _log_and_raise(error_msg, Exc):
-            self._log(False, req, error_msg)
-            raise Exc(error_msg)
-
-        try:
-            data = KeyRegRequest(json)
-        except Exception as e:
-            _log_and_raise('{0}: {1}: {2}'.format(
-                self.E_BAD_REQ, e.__class__.__name__, e),
-                self.X_BAD_REQ)
-
-        if data.superkey != self.superkey:
-            _log_and_raise(self.E_UNAUTHORIZED_KEY, self.X_UNAUTHORIZED_KEY)
-
-        try:
-            self.store.register(data.newkey)
-        except Exception as e:
-            _log_and_raise('{0}: {1}: {2}'.format(
-                self.E_BAD_REQ, e.__class__.__name__, e),
-                self.X_BAD_REQ)
-        self.keys.add(data.newkey)
-        return Response(body=self.KEYREGOK)
-
-    def _identify(self, req, json):
-        def _log_and_raise(error_msg, Exc):
-            self._log(False, req, error_msg)
-            raise Exc(error_msg)
-
-        try:
-            data = SiCDSRequest(json)
-        except Exception as e:
-            _log_and_raise('{0}: {1}: {2}'.format(
-                self.E_BAD_REQ, e.__class__.__name__, e),
-                self.X_BAD_REQ)
-
-        if data.key not in self.keys:
-            _log_and_raise(self.E_UNAUTHORIZED_KEY, self.X_UNAUTHORIZED_KEY)
-
-        uniq, dup = self._process(data.key, data.contentItems)
-        results = [dict(id=i, result=self.RES_UNIQ) for i in uniq] + \
-                  [dict(id=i, result=self.RES_DUP) for i in dup]
-        resp_body = dict(key=data.key, results=results)
-        self._log(True, req, resp_body, uniq, dup)
-        return Response(content_type='application/json', body=dumps(resp_body))
-
-    def _process(self, key, items):
-        uniqitems = []
-        dupitems = []
-        for item in items:
-            uniq = True
-            for collection in item.difcollections:
-                difs = collection.difs
-                if self.store.has(key, difs):
-                    uniq = False
-                else:
-                    self.store.add(key, difs)
-            if uniq:
-                uniqitems.append(item.id)
-            else:
-                dupitems.append(item.id)
-        return uniqitems, dupitems
-
-
-    _routes = {
-        R_IDENTIFY: _identify,
-        R_REGISTER_KEY: _register,
-        }
 
     def __init__(self, keys, superkey, store, loggers):
         '''
@@ -182,27 +110,70 @@ class SiCDSApp(object):
             else:
                 logger.error(*args, **kw)
 
+    def _register(self, json):
+        data = KeyRegRequest(json)
+        if data.superkey != self.superkey:
+            raise exc.HTTPForbidden
+        registered = self.store.register_key(data.newkey)
+        self.keys.add(data.newkey)
+        resp = KeyRegResponse(key=data.newkey, registered=registered)
+        return Response(body=dumps(resp.unwrap))
+
+    def _identify(self, json):
+        data = IDRequest(json)
+        if data.key not in self.keys:
+            raise exc.HTTPForbidden
+        uniq, dup = self._process(data.key, data.contentItems)
+        results = [IDResult({'id': i, 'result': True}) for i in uniq] + \
+                  [IDResult({'id': i, 'result': False}) for i in dup]
+        resp = IDResponse(key=data.key, results=results).unwrap
+        return Response(content_type='application/json', body=dumps(resp))
+
+    def _process(self, key, items):
+        uniqitems = []
+        dupitems = []
+        for item in items:
+            uniq = True
+            for collection in item.difcollections:
+                difs = collection.difs
+                if self.store.has(key, difs):
+                    uniq = False
+                else:
+                    self.store.add(key, difs)
+            if uniq:
+                uniqitems.append(item.id)
+            else:
+                dupitems.append(item.id)
+        return uniqitems, dupitems
+
+    #: routes
+    R_IDENTIFY = '/'
+    R_REGISTER_KEY = '/register'
+    _routes = {
+        R_IDENTIFY: _identify,
+        R_REGISTER_KEY: _register,
+        }
+
     @wsgify
     def __call__(self, req):
-        def _log_and_raise(error_msg, Exc):
-            self._log(False, req, error_msg)
-            raise Exc(error_msg)
-
-        if req.path_info not in self._routes:
-            _log_and_raise(self.E_NOT_FOUND, self.X_NOT_FOUND)
-        if req.method != 'POST':
-            _log_and_raise(self.E_METHOD_NOT_ALLOWED, self.X_METHOD_NOT_ALLOWED)
-        if req.content_length > self.REQMAXBYTES:
-            _log_and_raise(self.E_REQ_TOO_LARGE, self.X_REQ_TOO_LARGE)
         try:
+            if req.path_info not in self._routes:
+                raise exc.HTTPNotFound
+            if req.method != 'POST':
+                raise exc.HTTPMethodNotAllowed
+            if req.content_length > self.REQMAXBYTES:
+                raise exc.HTTPRequestEntityTooLarge
             json = loads(req.body)
+            handler = self._routes[req.path_info]
+            resp = handler(self, json)
+            self._log(True, req, resp)
+            return resp
+        except exc.HTTPException as e:
+            self._log(False, req, repr(e))
+            raise
         except Exception as e:
-            _log_and_raise('{0}: {1}: {2}'.format(
-                self.E_BAD_REQ, e.__class__.__name__, e),
-                self.X_BAD_REQ)
-
-        handler = self._routes[req.path_info]
-        return handler(self, req, json)
+            self._log(False, req, repr(e))
+            raise exc.HTTPBadRequest(str(e))
 
 def main():
     from config import SiCDSConfig, DEFAULTCONFIG

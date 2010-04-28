@@ -77,6 +77,18 @@ function (doc) {{
         except Exception as e:
             raise UpdateFailed(str(e))
 
+    def register_key(self, newkey):
+        keydoc = self.db[self.KEYDOCID]
+        currkeys = keydoc[self.kKEYS]
+        if newkey in currkeys:
+            return False
+        currkeys.append(newkey)
+        try:
+            self.db[self.KEYDOCID] = keydoc
+            return True
+        except Exception as e:
+            raise UpdateFailed(str(e))
+
     def ensure_keys(self, keys):
         keydoc = self.db[self.KEYDOCID]
         currkeys = keydoc[self.kKEYS]

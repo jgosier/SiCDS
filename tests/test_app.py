@@ -25,13 +25,15 @@ from json import dumps, loads
 from pprint import pformat
 from re import compile
 from sys import stdout
+from webob import exc
 from webtest import TestApp
 
-from sicds.app import SiCDSApp
+from sicds.app import SiCDSApp, IDRequest, IDResult, IDResponse, \
+    KeyRegRequest, KeyRegResponse
 from sicds.config import SiCDSConfig
 
-TESTKEY = 'sicds_test_key'
-TESTSUPERKEY = 'sicds_test_superkey'
+TESTKEY = 'test_key'
+TESTSUPERKEY = 'test_superkey'
 TESTPORT = 8635
 
 def test_config(store):
@@ -52,7 +54,8 @@ def next_str(prefix, counter):
     return '{0}{1}'.format(prefix, counter.next())
 
 def make_req(key=TESTKEY, contentItems=[{}]):
-    return dict(key=key, contentItems=[make_item(**i) for i in contentItems])
+    return IDRequest(key=key,
+        contentItems=[make_item(**i) for i in contentItems]).unwrap
 
 def make_item(id=None, difcollections=[{}], next_item=partial(next_str, 'item', count())):
     return dict(id=id or next_item(), difcollections=[make_coll(**c) for c in difcollections])
@@ -66,34 +69,25 @@ def make_dif(type=None, value=None,
         ):
     return dict(type=type or next_type(), value=value or next_val())
 
+def make_resp(req, uniq=True):
+    results = [IDResult(id=coll['id'], result=uniq)
+        for coll in req['contentItems']]
+    return IDResponse(key=req['key'], results=results).unwrap
+
 class TestCase(object):
     '''
-    Encapsulates a SiCDSRequest, an expected response status code, and part of
-    an expected response body.
-
-    Random data will be generated where ``reqdata`` lacks it.
+    Encapsulates a SiCDSRequest, a path, an expected response, and status code.
     '''
-    def __init__(self, desc, reqdata, req_path=SiCDSApp.R_IDENTIFY,
-            res_status_expect=200, res_body_expect=''):
+    def __init__(self, desc, req, resp='', path=SiCDSApp.R_IDENTIFY, status=200):
         self.desc = desc
-        self.req_path = req_path
-        self.req_body = dumps(reqdata)
-        self.res_status_expect = res_status_expect
-        if isinstance(res_body_expect, dict):
-            res_body_expect = dumps(res_body_expect)
-        self.res_body_expect = res_body_expect
+        self.req = dumps(req) if isinstance(req, dict) else req
+        self.resp = dumps(resp) if isinstance(resp, dict) else resp
+        self.path = path
+        self.status = status
 
     @property
     def expect_errors(self):
-        return self.res_status_expect >= 400
-
-def result_str(uniq):
-    return SiCDSApp.RES_UNIQ if uniq else SiCDSApp.RES_DUP
-
-def make_resp(req, uniq=True):
-    results = [dict(id=coll['id'], result=result_str(uniq))
-        for coll in req['contentItems']]
-    return {'key': req['key'], 'results': results}
+        return self.status >= 400
 
 test_cases = []
 
@@ -101,11 +95,11 @@ test_cases = []
 # first time we see an item it should be unique,
 # subsequent times it should be duplicate
 req1 = make_req()
-res1_uniq = make_resp(req1, uniq=True)
-res1_dup = make_resp(req1, uniq=False)
-tc_uniq = TestCase('item1 unique', req1, res_body_expect=res1_uniq)
-tc_dup = TestCase('item1 now duplicate', req1, res_body_expect=res1_dup)
-test_cases.extend((tc_uniq, tc_dup))
+res1_u = make_resp(req1, uniq=True)
+res1_d = make_resp(req1, uniq=False)
+tc_u = TestCase('item1 unique', req1, res1_u)
+tc_d = TestCase('item1 now duplicate', req1, res1_d)
+test_cases.extend((tc_u, tc_d))
 
 # test multi-collection identification
 # if we see an item with multiple collections, each of which we haven't seen
@@ -120,13 +114,13 @@ i3 = make_item(difcollections=[c3])
 req2 = make_req(contentItems=[i1])
 req3 = make_req(contentItems=[i2])
 req4 = make_req(contentItems=[i3])
-res2_uniq = make_resp(req2, uniq=True)
-res3_dup = make_resp(req3, uniq=False)
-res4_dup = make_resp(req4, uniq=False)
-tc_uniq2 = TestCase('[c1, c2] collections unique', req2, res_body_expect=res2_uniq)
-tc_dup2 = TestCase('[c2, c3] collections duplicate', req3, res_body_expect=res3_dup)
-tc_dup3 = TestCase('[c3] collection duplicate', req4, res_body_expect=res4_dup)
-test_cases.extend((tc_uniq2, tc_dup2, tc_dup3))
+res2_u = make_resp(req2, uniq=True)
+res3_d = make_resp(req3, uniq=False)
+res4_d = make_resp(req4, uniq=False)
+tc_u2 = TestCase('[c1, c2] collections unique', req2, res2_u)
+tc_d2 = TestCase('[c2, c3] collections duplicate', req3, res3_d)
+tc_d3 = TestCase('[c3] collection duplicate', req4, res4_d)
+test_cases.extend((tc_u2, tc_d2, tc_d3))
 
 # test that order of difs does not matter
 d1 = make_dif()
@@ -137,54 +131,47 @@ i12 = make_item(difcollections=[c12])
 i21 = make_item(difcollections=[c21])
 req12 = make_req(contentItems=[i12])
 req21 = make_req(contentItems=[i21])
-res12_uniq = make_resp(req12, uniq=True)
-res21_dup = make_resp(req21, uniq=False)
-tc_uniq12 = TestCase('[dif1, dif2] unique',
-    req12, res_body_expect=res12_uniq)
-tc_dup21 = TestCase('[dif2, dif1] duplicate (order does not matter)',
-    req21, res_body_expect=res21_dup)
-test_cases.extend((tc_uniq12, tc_dup21))
+res12_u = make_resp(req12, uniq=True)
+res21_d = make_resp(req21, uniq=False)
+tc_u12 = TestCase('[dif1, dif2] unique', req12, res12_u)
+tc_d21 = TestCase('[dif2, dif1] duplicate (order does not matter)', req21, res21_d)
+test_cases.extend((tc_u12, tc_d21))
 
 # test registering a new key
-NEWKEY = 'sicds_test_key2'
-req_keyreg = {'superkey': TESTSUPERKEY, 'newkey': NEWKEY}
-tc_keyreg = TestCase('register new key', req_keyreg,
-    req_path=SiCDSApp.R_REGISTER_KEY,
-    res_body_expect=SiCDSApp.KEYREGOK)
+NEWKEY = 'test_key2'
+req_keyreg = KeyRegRequest(superkey=TESTSUPERKEY, newkey=NEWKEY).unwrap
+res_keyreg = KeyRegResponse(key=NEWKEY, registered=True).unwrap
+tc_keyreg = TestCase('register new key', req_keyreg, res_keyreg,
+    path=SiCDSApp.R_REGISTER_KEY)
 test_cases.append(tc_keyreg)
 
 # existing content should look new to the client using the new key
 req1_newkey = dict(req1, key=NEWKEY)
-res1_newkey = dict(res1_uniq, key=NEWKEY)
-tc_newkey_uniq = TestCase('item1 unique to new client',
-    req1_newkey, res_body_expect=res1_newkey)
-test_cases.append(tc_newkey_uniq)
+res1_newkey = dict(res1_u, key=NEWKEY)
+tc_newkey_u = TestCase('item1 unique to new client', req1_newkey, res1_newkey)
+test_cases.append(tc_newkey_u)
 
 # check that various bad requests give error responses
 req_badkey = dict(req1, key='bad_key')
 tc_badkey = TestCase('reject bad key', req_badkey,
-    res_status_expect=SiCDSApp.X_UNAUTHORIZED_KEY().status_int,
-    res_body_expect=SiCDSApp.E_UNAUTHORIZED_KEY,
+    status=exc.HTTPForbidden().status_int,
     )
 test_cases.append(tc_badkey)
 
 tc_missing_fields = TestCase('reject missing fields', {},
-    res_status_expect=SiCDSApp.X_BAD_REQ().status_int, 
-    res_body_expect=SiCDSApp.E_BAD_REQ,
+    status=exc.HTTPBadRequest().status_int,
     )
 test_cases.append(tc_missing_fields)
 
 req_extra_fields = dict(make_req(), extra='extra')
 tc_extra_fields = TestCase('reject extra fields', req_extra_fields,
-    res_status_expect=SiCDSApp.X_BAD_REQ().status_int, 
-    res_body_expect=SiCDSApp.E_BAD_REQ,
+    status=exc.HTTPBadRequest().status_int,
     )
 test_cases.append(tc_extra_fields)
 
 req_too_large = {'too_large': ' '*SiCDSApp.REQMAXBYTES}
 tc_too_large = TestCase('reject too large', req_too_large,
-    res_status_expect=SiCDSApp.X_REQ_TOO_LARGE().status_int, 
-    res_body_expect=SiCDSApp.E_REQ_TOO_LARGE,
+    status=exc.HTTPRequestEntityTooLarge().status_int,
     )
 test_cases.append(tc_too_large)
 
@@ -200,12 +187,11 @@ for config in test_configs:
     app = SiCDSApp(config.keys, config.superkey, config.store, config.loggers)
     app = TestApp(app)
     for tc in test_cases:
-        resp = app.post(tc.req_path, tc.req_body, status=tc.res_status_expect,
+        resp = app.post(tc.path, tc.req, status=tc.status,
             expect_errors=tc.expect_errors, headers={
             'content-type': 'application/json'})
-        if tc.res_body_expect not in resp:
-            tc.res_status_got = resp.status_int
-            tc.res_body_got = resp.body
+        if tc.status != resp.status_int or tc.resp not in resp:
+            tc.got_resp = resp.body
             nfailed += 1
             failures.append(tc)
             stdout.write('F')
@@ -233,8 +219,8 @@ if nfailed:
             print('\n    test:')
             print('      {0}'.format(tc.desc))
             print('    request:')
-            print(indented(tc.req_body, collapse_whitespace=False))
+            print(indented(tc.req, collapse_whitespace=False))
             print('    expected response:')
-            print(indented(tc.res_body_expect))
+            print(indented(tc.resp))
             print('    got response:')
-            print(indented(tc.res_body_got))
+            print(indented(tc.got_resp))
