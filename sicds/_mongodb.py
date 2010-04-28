@@ -21,8 +21,14 @@
 from sicds.base import DocStore, as_tuples
 
 class MongoStore(DocStore):
+    #: the name of the collection that stores log entries
+    cLOG = 'logentries'
+    #: the name of the collection that stores the single api-keys document
+    cKEYS = 'keys'
+    #: collections of difs are named by this prefix and their corresponding key
+    cKEYPREFIX = 'KEY:'
+    #: the key in the dif documents that maps to the value
     kDIFS = 'difs'
-    _KEYPREFIX = u'KEY:'
 
     def __init__(self, url):
         from pymongo import Connection
@@ -34,12 +40,14 @@ class MongoStore(DocStore):
         self._bootstrap()
 
     def _bootstrap(self):
-        self.keyc = self.db[self.kKEYS]
+        self.logc = self.db[self.cLOG]
+        self.logc.ensure_index(self.LOG_INDEX)
+        self.keyc = self.db[self.cKEYS]
         if not self.keyc.find_one():
             self.keyc.insert({self.kKEYS: []})
         self.difc_by_key = {}
         for key in self.keyc.find_one()[self.kKEYS]:
-            difc = self.db[self._KEYPREFIX + key]
+            difc = self.db[self.cKEYPREFIX + key]
             difc.ensure_index(self.kDIFS, unique=True)
             self.difc_by_key[key] = difc
 
@@ -56,13 +64,13 @@ class MongoStore(DocStore):
     def register_key(self, newkey):
         if newkey in self.db.collection_names():
             return False
-        difc = self.db[self._KEYPREFIX + newkey]
+        difc = self.db[self.cKEYPREFIX + newkey]
         difc.ensure_index(self.kDIFS, unique=True)
         self.difc_by_key[newkey] = difc
         return True
 
     def ensure_keys(self, keys):
-        kp = self._KEYPREFIX
+        kp = self.cKEYPREFIX
         n = len(kp)
         newkeys = set(keys) - set(i[n:] for i in \
             self.db.collection_names() if i.startswith(kp))
@@ -75,9 +83,5 @@ class MongoStore(DocStore):
         self.conn.drop_database(self.db)
         self._bootstrap()
 
-#class MongoLogger(MongoStore, BaseLogger):
-#    '''
-#    Stores log entries in a MongoDB instance.
-#    '''
-#    def _store(self, entry):
-#        self.collection.insert(entry)
+    def _append_log(self, entry):
+        self.logc.insert(entry)

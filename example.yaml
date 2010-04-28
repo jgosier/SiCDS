@@ -18,7 +18,6 @@ store: tmp: # in memory (will be lost on restart!)
 #store: mongodb://localhost:27017/sicds
 
 loggers:
-  - file:///dev/stdout # also the default if none given
 # - null: # suppress logging
-# - couchdb://localhost:5984/sicds
-# - mongodb://localhost:27017/sicds
+  - file:///dev/stdout
+  - store: # use whatever was configured as the store

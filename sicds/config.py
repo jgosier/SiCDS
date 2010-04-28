@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # Copyright (C) 2010 Ushahidi Inc. <jon@ushahidi.com>,
 # Joshua Bronson <jabronson@gmail.com>, and contributors
 #
@@ -18,11 +19,12 @@
 # Boston, MA  02110-1301
 # USA
 
-from _couchdb import CouchStore#, CouchLogger
-from _mongodb import MongoStore#, MongoLogger
-from base import TmpStore, UrlInitable
-from loggers import TmpLogger, NullLogger, FileLogger, StdOutLogger
-from schema import Schema, SchemaError, many, t_str, withdefault
+from sicds._couchdb import CouchStore
+from sicds._mongodb import MongoStore
+from sicds.base import TmpStore, UrlInitable
+from sicds.loggers import NullLogger, FileLogger, StdOutLogger
+from sicds.schema import Reference, Schema, SchemaError, many, \
+    withdefault, t_uni
 from urlparse import urlsplit
 
 DEFAULTKEY = 'sicds_default_key'
@@ -38,13 +40,6 @@ DEFAULTCONFIG = dict(
     loggers=['file:///dev/stdout'],
     )
 
-#DIFSTORES = {
-#    None: TmpStore, # default if not specified
-#    'tmp': TmpStore,
-#    'couchdb': CouchStore,
-#    'mongodb': MongoStore,
-#    }
-
 STORES = {
     None: TmpStore, # default if not specified
     'tmp': TmpStore,
@@ -54,17 +49,10 @@ STORES = {
 
 LOGGERS = {
     None: StdOutLogger, # default if not specified
-    'tmp': TmpLogger,
     'null': NullLogger,
     'file': FileLogger,
-#    'couchdb': CouchLogger,
-#    'mongodb': MongoLogger,
+    'store': Reference('store'),
     }
-
-#BACKENDS = {
-#    'couchdb': {'difstore': CouchStore, 'logger': CouchLogger},
-#    'mongodb': {'difstore': MongoStore, 'logger': MongoLogger},
-#    }
 
 class ConfigError(SchemaError): pass
 class UnknownUrlScheme(ConfigError): pass
@@ -90,7 +78,13 @@ def _instance_from_url(url, urlscheme2type):
             Class = urlscheme2type[scheme]
         except KeyError:
             raise UnknownUrlScheme(scheme)
-        #assert issubclass(Class, UrlInitable)
+        if isinstance(Class, Reference):
+            return Class
+        if not issubclass(Class, UrlInitable): # XXX
+            from sicds.base import BaseLogger
+            print issubclass(BaseLogger, UrlInitable)
+            print issubclass(FileLogger, BaseLogger)
+            print issubclass(FileLogger, UrlInitable)
         return Class(url)
     except:
         raise UrlInitFailure(url) 
@@ -103,8 +97,8 @@ def logger_from_url(url):
 
 class SiCDSConfig(Schema):
     required = {
-        'keys': many(t_str, atleast=1),
-        'superkey': t_str,
+        'keys': many(t_uni, atleast=1),
+        'superkey': t_uni,
         'store': store_from_url,
         }
     optional = {
@@ -112,3 +106,7 @@ class SiCDSConfig(Schema):
         'port': withdefault(int, DEFAULTPORT),
         'loggers': withdefault(many(logger_from_url), [StdOutLogger()]),
         }
+
+if __name__ == '__main__':
+    import doctest
+    doctest.testmod(optionflags=doctest.ELLIPSIS)

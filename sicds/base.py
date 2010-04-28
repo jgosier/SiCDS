@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # Copyright (C) 2010 Ushahidi Inc. <jon@ushahidi.com>,
 # Joshua Bronson <jabronson@gmail.com>, and contributors
 #
@@ -18,6 +19,8 @@
 # Boston, MA  02110-1301
 # USA
 
+from datetime import datetime
+utcnow = datetime.utcnow
 
 class StoreError(Exception): pass
 class UpdateFailed(StoreError): pass
@@ -31,7 +34,30 @@ class UrlInitable(object):
     def __init__(self, url):
         pass
 
-class BaseStore(UrlInitable):
+class BaseLogger(UrlInitable):
+    '''
+    Abstract base class for logger objects.
+    '''
+    #: subclasses can index entries by this field if they support it
+    LOG_INDEX = 'timestamp'
+
+    def log(self, remote_addr, path, req, resp, success=True, **kw):
+        entry = dict(
+            timestamp=utcnow().isoformat(),
+            remote_addr=remote_addr,
+            path=path,
+            req=req,
+            resp=resp,
+            success=success,
+            **kw
+            )
+        self._append_log(entry)
+
+    def _append_log(self, entry):
+        raise NotImplementedError
+
+
+class BaseStore(BaseLogger):
     '''
     Abstract base class for Store objects.
     '''
@@ -51,6 +77,10 @@ class BaseStore(UrlInitable):
         raise NotImplementedError
 
 def as_tuples(difs):
+    '''
+    Serializes an iterable of :class:`sicds.app.Dif` objects into a
+    canonical representation.
+    '''
     return tuple(sorted((('type', d.type), ('value', d.value)) for d in difs))
 
 def serialize(key, difs):
@@ -67,6 +97,7 @@ class TmpStore(BaseStore):
     '''
     def __init__(self, *args):
         self.db = {}
+        self._log_entries = []
 
     def has(self, key, difs):
         difs = as_tuples(difs)
@@ -90,6 +121,9 @@ class TmpStore(BaseStore):
     def clear(self):
         self.db.clear()
 
+    def _append_log(self, entry):
+        self._log_entries.append(entry)
+
 class DocStore(BaseStore):
     '''
     Abstract base class for document-oriented stores such as CouchDB and
@@ -98,7 +132,7 @@ class DocStore(BaseStore):
     #: the key in the dif documents that maps to the value
     kDIFS = 'difs_by_key'
 
-    #: the key in the api key document that maps to the keys
+    #: the key in the api-key document that maps to the keys
     kKEYS = 'keys'
 
     @classmethod

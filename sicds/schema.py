@@ -21,12 +21,14 @@
 
 from functools import wraps
 from itertools import chain
+from sicds.base import UrlInitable
 
 class SchemaError(Exception): pass
 class RequiredField(SchemaError): pass
 class InvalidField(SchemaError): pass
 class EmptyField(SchemaError): pass
 class ExtraFields(SchemaError): pass
+class ReferenceError(SchemaError): pass
 
 class Schema(object):
     '''
@@ -154,17 +156,17 @@ class Schema(object):
     required = {}
     optional = {}
 
-    @staticmethod
-    def _validate(field, validator, value):
+    def _validate(self, field, validator, value):
         value = unwrap(value)
         try:
-            return validator(value)
+            value = validator(value)
         except EmptyField:
             raise EmptyField(field)
         except SchemaError:
             raise
-        except:
+        except Exception as e:
             raise InvalidField(field, value)
+        return value
 
     def __init__(self, *args, **kw):
         values = dict(*args, **kw)
@@ -179,6 +181,7 @@ class Schema(object):
                 value = validator() # call with no args for default value
             else:
                 value = self._validate(field, validator, value)
+            value = dereference(value, self)
             object.__setattr__(self, field, value)
 
         if values:
@@ -233,6 +236,22 @@ def unwrap(x):
     except:
         return x
 
+class Reference(object):
+    def __init__(self, field):
+        self.field = field
+
+def dereference(x, referent):
+    if isinstance(x, Reference):
+        return getattr(referent, x.field)
+    if isinstance(x, dict):
+        return dict((k, dereference(v, referent)) for (k, v) in x.iteritems())
+    if isinstance(x, basestring):
+        return x
+    try:
+        return [dereference(i, referent) for i in x]
+    except:
+        return x
+
 def nonfalse(validator):
     '''
     Wraps a validator in a function that checks the result for its truth value
@@ -256,12 +275,12 @@ def nonfalse(validator):
         return result
     return wrapper
 
-t_str, t_uni, t_int = [nonfalse(i) for i in (str, unicode, int)]
+t_uni, t_int = [nonfalse(i) for i in (unicode, int)]
 
 def withdefault(validator, default):
     '''
     Wraps a validator you do not want to call with no arguments and returns
-    the given ``default`` value in this case.
+    the given default value when called with no args.
 
     Useful for optional fields::
 
@@ -278,6 +297,7 @@ def withdefault(validator, default):
         >>> app = App(port=1234)
         >>> app.port
         1234
+
     '''
     @wraps(validator)
     def wrapper(*args):

@@ -18,11 +18,12 @@
 # Boston, MA  02110-1301
 # USA
 
-from sicds.base import DocStore, NoSuchKey, UpdateFailed, serialize
+from sicds.base import BaseLogger, DocStore, NoSuchKey, UpdateFailed, serialize
 from string import digits, ascii_letters
 
-class CouchStore(DocStore):#, BaseLogger):
+class CouchStore(DocStore):
     DIFDESIGNDOCID = 'difs'
+    LOGDESIGNDOCID = 'log'
     KEYDOCID = 'keys'
 
     DIF_VIEW_NAME = 'difs_by_key'
@@ -32,6 +33,14 @@ function (doc) {{
     emit(doc.{0}, null);
 }}
 '''.format(DocStore.kDIFS)
+
+    LOG_VIEW_NAME = 'entries'
+    LOG_VIEW_CODE = '''
+function (doc) {{
+  if (doc.{0})
+    emit(doc.{0}, null);
+}}
+'''.format(BaseLogger.LOG_INDEX)
 
     def __init__(self, url):
         from couchdb import Server
@@ -47,7 +56,10 @@ function (doc) {{
         from couchdb.design import ViewDefinition
         self._dif_view = ViewDefinition(self.DIFDESIGNDOCID,
             self.DIF_VIEW_NAME, self.DIF_VIEW_CODE)
+        self._log_view = ViewDefinition(self.LOGDESIGNDOCID,
+            self.LOG_VIEW_NAME, self.LOG_VIEW_CODE)
         self._dif_view.sync(self.db)
+        self._log_view.sync(self.db)
 
     def has(self, key, difs):
         s = serialize(key, difs)
@@ -111,13 +123,11 @@ function (doc) {{
             del self.server[self.dbid]
         self._bootstrap()
 
-
-#class CouchLogger(CouchStore, BaseLogger):
-#    '''
-#    Stores log entries in a CouchDB instance.
-#    '''
-#    def _store(self, entry):
-#        self.db.save(entry)
+    def _append_log(self, entry):
+        try:
+            self.db.save(entry)
+        except Exception as e:
+            raise UpdateFailed(str(e))
 
 def change_base(x, charset=digits+ascii_letters, base=None):
     '''

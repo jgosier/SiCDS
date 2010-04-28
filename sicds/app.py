@@ -20,21 +20,16 @@
 # USA
 
 from json import loads, dumps
-from sicds.schema import Schema, InvalidField, many, t_str, t_uni
+from sicds.schema import Schema, InvalidField, many, t_uni
 from urlparse import urlsplit
 from webob import Response, exc
 from webob.dec import wsgify
 
 class KeyRegRequest(Schema):
-    required = {'superkey': t_str, 'newkey': t_str}
-
-def v_keyregresult(registered):
-    if registered:
-        return 'registered'
-    return 'already registered'
+    required = {'superkey': t_uni, 'newkey': t_uni}
 
 class KeyRegResponse(Schema):
-    required = {'key': t_str, 'registered': v_keyregresult}
+    required = {'key': t_uni, 'registered': t_uni}
 
 class Dif(Schema):
     required = {'type': t_uni, 'value': t_uni}
@@ -65,25 +60,20 @@ class IDRequest(Schema):
     >>> req
     <IDRequest ...>
     >>> req.key
-    'some_key'
+    u'some_key'
     >>> IDRequest({'fields': 'missing'})
     Traceback (most recent call last):
       ...
     RequiredField: ...
 
     '''
-    required = {'key': t_str, 'contentItems': many(ContentItem, atleast=1)}
-
-def v_idresult(uniq):
-    if uniq:
-        return 'unique'
-    return 'duplicate'
+    required = {'key': t_uni, 'contentItems': many(ContentItem, atleast=1)}
 
 class IDResult(Schema):
-    required = {'id': t_uni, 'result': v_idresult}
+    required = {'id': t_uni, 'result': t_uni}
 
 class IDResponse(Schema):
-    required = {'key': t_str, 'results': many(IDResult, atleast=1)}
+    required = {'key': t_uni, 'results': many(IDResult, atleast=1)}
 
 
 class SiCDSApp(object):
@@ -103,12 +93,9 @@ class SiCDSApp(object):
         self.loggers = loggers
         self.store.ensure_keys(self.keys)
 
-    def _log(self, success, *args, **kw):
+    def log(self, *args, **kw):
         for logger in self.loggers:
-            if success:
-                logger.success(*args, **kw)
-            else:
-                logger.error(*args, **kw)
+            logger.log(*args, **kw)
 
     def _register(self, json):
         data = KeyRegRequest(json)
@@ -117,17 +104,17 @@ class SiCDSApp(object):
         registered = self.store.register_key(data.newkey)
         self.keys.add(data.newkey)
         resp = KeyRegResponse(key=data.newkey, registered=registered)
-        return Response(body=dumps(resp.unwrap))
+        return resp.unwrap
 
     def _identify(self, json):
         data = IDRequest(json)
         if data.key not in self.keys:
             raise exc.HTTPForbidden
         uniq, dup = self._process(data.key, data.contentItems)
-        results = [IDResult({'id': i, 'result': True}) for i in uniq] + \
-                  [IDResult({'id': i, 'result': False}) for i in dup]
-        resp = IDResponse(key=data.key, results=results).unwrap
-        return Response(content_type='application/json', body=dumps(resp))
+        results = [IDResult({'id': i, 'result': 'unique'}) for i in uniq] + \
+                  [IDResult({'id': i, 'result': 'duplicate'}) for i in dup]
+        resp = IDResponse(key=data.key, results=results)
+        return resp.unwrap
 
     def _process(self, key, items):
         uniqitems = []
@@ -166,14 +153,14 @@ class SiCDSApp(object):
             json = loads(req.body)
             handler = self._routes[req.path_info]
             resp = handler(self, json)
-            self._log(True, req, resp)
-            return resp
-        except exc.HTTPException as e:
-            self._log(False, req, repr(e))
-            raise
+            self.log(req.remote_addr, req.path_info, json, resp, success=True)
+            return Response(content_type='application/json', body=dumps(resp))
         except Exception as e:
-            self._log(False, req, repr(e))
-            raise exc.HTTPBadRequest(str(e))
+            self.log(req.remote_addr, req.path_info, 
+                req.body[:self.REQMAXBYTES], repr(e), success=False)
+            if isinstance(e, exc.HTTPException):
+                raise
+            raise exc.HTTPBadRequest(repr(e))
 
 def main():
     from config import SiCDSConfig, DEFAULTCONFIG
@@ -194,9 +181,7 @@ def main():
         except IOError:
             die('Could not open file {0}'.format(configpath))
     else:
-        import doctest
-        doctest.testmod(optionflags=doctest.ELLIPSIS)
-
+        import doctest; doctest.testmod(optionflags=doctest.ELLIPSIS)
         config = DEFAULTCONFIG
         print('Warning: Using default configuration. Data will not be persisted.')
 
