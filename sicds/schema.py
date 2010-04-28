@@ -156,8 +156,7 @@ class Schema(object):
 
     @staticmethod
     def _validate(field, validator, value):
-        if hasattr(value, 'unwrap'):
-            value = value.unwrap
+        value = unwrap(value)
         try:
             return validator(value)
         except EmptyField:
@@ -211,12 +210,10 @@ class Schema(object):
         return unwrap(self)
 
     def __eq__(self, other):
-        if isinstance(other, Schema):
-            return self.unwrap == other.unwrap
+        other = unwrap(other)
         if isinstance(other, dict):
-            withdefaults = dict(self._defaults, **other)
-            return self.unwrap == withdefaults
-        return False
+            other = dict(self._defaults, **other)
+        return unwrap(self) == other
 
     def __repr__(self):
         return '<{0} {1}>'.format(self.__class__.__name__,
@@ -228,7 +225,7 @@ def unwrap(x):
         return dict((field, unwrap(getattr(x, field)))
             for field in chain(x.required, x.optional))
     if isinstance(x, dict):
-        return dict((k, unwrap(v)) for (k, v) in x)
+        return dict((k, unwrap(v)) for (k, v) in x.iteritems())
     if isinstance(x, basestring):
         return x
     try:
