@@ -6,7 +6,7 @@ This is a Python WSGI application.
 Requirements
 ------------
 
-- `Python <http://www.python.org/>`_ 2.6.5
+- `Python 2.6.5 <http://www.python.org/download/releases/2.6.5/>`_
 - `WebOb <http://pypi.python.org/pypi/WebOb>`_
 - `PyYAML <http://pypi.python.org/pypi/PyYAML>`_
 
@@ -18,3 +18,5 @@ Otherwise, SiCDS can be pointed at a persistent datastore via configuration
   `couchdb-python <http://pypi.python.org/pypi/CouchDB>`_)
 - `MongoDB <http://www.mongodb.org/>`_ (requires
   `pymongo <http://pypi.python.org/pypi/pymongo>`_)
+
+To run the tests, install `WebTest <http://pypi.python.org/pypi/WebTest>`_.
