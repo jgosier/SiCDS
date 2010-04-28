@@ -30,14 +30,14 @@ class ExtraFields(SchemaError): pass
 
 class Schema(object):
     '''
-    Subclasses specify required and optional fieldname->validator mappings to
+    Subclasses specify required and optional field->validator mappings to
     create a corresponding schema. Validators should raise an Exception if
     given invalid values, and return a valid value otherwise. When called with
     no arguments, validators should return a default value.
 
-    The constructor will process the given mapping, raising an exception if it
-    does not fulfill the schema, and setting the specified attributes on itself
-    otherwise.
+    The constructor will process the given mappings, raising an exception if it
+    does not fulfill the schema, and setting the specified fields as attributes
+    on itself otherwise.
 
     Example::
 
@@ -55,17 +55,17 @@ class Schema(object):
 
     Let's test these out::
 
-        >>> name = Name({'first': 'Homer'})
+        >>> name = Name(first='Homer')
         Traceback (most recent call last):
           ...
         RequiredField: last
 
-        >>> name = Name({'first': 'Homer', 'last': 'Simpson', 'middle': 'J'})
+        >>> name = Name(first='Homer', last='Simpson', middle='J')
         Traceback (most recent call last):
           ...
-        ExtraFields: {'middle': 'J'}
+        ExtraFields: middle
 
-        >>> name = Name({'first': 'Homer', 'last': 'Simpson'})
+        >>> name = Name(first='Homer', last='Simpson')
         >>> name
         <Name first=Homer last=Simpson>
 
@@ -88,16 +88,16 @@ class Schema(object):
     field to be reset to its default value::
 
         >>> del name.first
-        >>> name
-        <Name first= last=Simpson>
+        >>> name.first
+        ''
         >>> del name.last
         Traceback (most recent call last):
           ...
         RequiredField: last
 
-    Equivalence comparison works with other Schema instances and also dicts::
+    Equivalence comparison works with other Schema instances as well as dicts::
 
-        >>> name == Name({'last': 'Simpson'}) == {'last': 'Simpson'}
+        >>> name == Name(last='Simpson') == {'last': 'Simpson'}
         True
 
     You can unwrap the mapping underpinning the instance like::
@@ -108,12 +108,12 @@ class Schema(object):
 
     Let's demonstrate invalid fields::
 
-        >>> addr = Address({'number': 'abc', 'street': 'xyz'})
+        >>> addr = Address(number='abc', street='xyz')
         Traceback (most recent call last):
           ...
         InvalidField: ('number', 'abc')
 
-        >>> address = Address({'number': '742', 'street': 'Evergreen Terrace'})
+        >>> address = Address(number='742', street='Evergreen Terrace')
         >>> address
         <Address number=742 street=Evergreen Terrace>
 
@@ -126,14 +126,14 @@ class Schema(object):
     
     Now let's demonstrate the compound schema::
 
-        >>> ContactInfo({'name': {'last': 'Nahasapeemapetilon'}})
+        >>> ContactInfo(name=Name(last='Nahasapeemapetilon'))
         Traceback (most recent call last):
           ...
         RequiredField: address
 
     Here's a valid one, using our already-validated instances::
 
-        >>> info = ContactInfo({'name': name, 'address': address})
+        >>> info = ContactInfo(name=name, address=address)
 
     You can descend into subschemas::
 
@@ -147,7 +147,7 @@ class Schema(object):
 
     The round-trip::
 
-        >>> ContactInfo(info.unwrap) == info
+        >>> ContactInfo(**info.unwrap) == info
         True
 
     '''
@@ -165,13 +165,13 @@ class Schema(object):
         except:
             raise InvalidField(field, value)
 
-    def __init__(self, mapping):
-        mapping = dict(mapping)
-        unwrapped = {}
+    def __init__(self, *args, **kw):
+        values = dict(*args, **kw)
+        mapping = {}
         for field, validator in chain(
                 self.required.iteritems(), self.optional.iteritems()):
             try:
-                value = mapping.pop(field)
+                value = values.pop(field)
             except KeyError:
                 if field in self.required:
                     raise RequiredField(field)
@@ -182,20 +182,20 @@ class Schema(object):
                 if type(validator) == type(Schema) and \
                         issubclass(validator, Schema) and \
                         isinstance(value, validator):
-                    unwrapped[field] = value.unwrap
+                    mapping[field] = value.unwrap
                 else:
-                    unwrapped[field] = value
+                    mapping[field] = value
                     value = self._validate(field, validator, value)
             object.__setattr__(self, field, value)
 
-        if mapping:
-            raise ExtraFields(mapping)
+        if values:
+            raise ExtraFields(', '.join(values.iterkeys()))
 
         defaults = dict((field, validator()) for \
             (field, validator) in self.optional.iteritems())
-        unwrapped = dict(defaults, **unwrapped)
+        mapping = dict(defaults, **mapping)
         object.__setattr__(self, '_defaults', defaults)
-        object.__setattr__(self, '_unwrapped', unwrapped)
+        object.__setattr__(self, '_mapping', mapping)
 
     def __setattr__(self, attr, value):
         try:
@@ -209,22 +209,22 @@ class Schema(object):
         if type(validator) == type(Schema) and \
                 issubclass(validator, Schema) and \
                 isinstance(value, validator):
-            self._unwrapped[attr] = value.unwrap
+            self._mapping[attr] = value.unwrap
         else:
             validated = self._validate(attr, validator, value)
-            self._unwrapped[attr] = value
+            self._mapping[attr] = value
         object.__setattr__(self, attr, validated)
 
     def __delattr__(self, attr):
         if attr in self.required:
             raise RequiredField(attr)
         default = self._defaults[attr]
-        self._unwrapped[attr] = default
+        self._mapping[attr] = default
         object.__setattr__(self, attr, default)
 
     @property
     def unwrap(self):
-        return self._unwrapped
+        return self._mapping
 
     def __eq__(self, other):
         if isinstance(other, Schema):
@@ -276,12 +276,12 @@ def withdefault(validator, default):
         ...         'host': withdefault(str, 'localhost'),
         ...         'port': withdefault(int, 8080),
         ...         }
-        >>> app = App({})
+        >>> app = App()
         >>> app.host
         'localhost'
         >>> app.port
         8080
-        >>> app = App({'port': 1234})
+        >>> app = App(port=1234)
         >>> app.port
         1234
     '''
