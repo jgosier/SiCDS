@@ -67,7 +67,7 @@ class Schema(object):
 
         >>> name = Name(first='Homer', last='Simpson')
         >>> name
-        <Name first=Homer last=Simpson>
+        <Name first='Homer' last='Simpson'>
 
     You can get or set fields through attribute access:
 
@@ -75,7 +75,7 @@ class Schema(object):
         'Homer'
         >>> name.first = 'Lisa'
         >>> name
-        <Name first=Lisa last=Simpson>
+        <Name first='Lisa' last='Simpson'>
 
     But only fields that are part of the schema::
 
@@ -115,7 +115,7 @@ class Schema(object):
 
         >>> address = Address(number='742', street='Evergreen Terrace')
         >>> address
-        <Address number=742 street=Evergreen Terrace>
+        <Address number=742 street='Evergreen Terrace'>
 
     Validation is triggered on setattr as well::
         
@@ -147,7 +147,7 @@ class Schema(object):
 
     The round-trip::
 
-        >>> ContactInfo(**info.unwrap) == info
+        >>> ContactInfo(info.unwrap) == info
         True
 
     '''
@@ -156,6 +156,8 @@ class Schema(object):
 
     @staticmethod
     def _validate(field, validator, value):
+        if hasattr(value, 'unwrap'):
+            value = value.unwrap
         try:
             return validator(value)
         except EmptyField:
@@ -167,7 +169,6 @@ class Schema(object):
 
     def __init__(self, *args, **kw):
         values = dict(*args, **kw)
-        mapping = {}
         for field, validator in chain(
                 self.required.iteritems(), self.optional.iteritems()):
             try:
@@ -178,14 +179,7 @@ class Schema(object):
                 # field is optional, use default value
                 value = validator() # call with no args for default value
             else:
-                # check if it's already been validated into an expected Schema
-                if type(validator) == type(Schema) and \
-                        issubclass(validator, Schema) and \
-                        isinstance(value, validator):
-                    mapping[field] = value.unwrap
-                else:
-                    mapping[field] = value
-                    value = self._validate(field, validator, value)
+                value = self._validate(field, validator, value)
             object.__setattr__(self, field, value)
 
         if values:
@@ -193,9 +187,7 @@ class Schema(object):
 
         defaults = dict((field, validator()) for \
             (field, validator) in self.optional.iteritems())
-        mapping = dict(defaults, **mapping)
         object.__setattr__(self, '_defaults', defaults)
-        object.__setattr__(self, '_mapping', mapping)
 
     def __setattr__(self, attr, value):
         try:
@@ -205,26 +197,18 @@ class Schema(object):
                 validator = self.optional[attr]
             except KeyError:
                 raise ExtraFields(attr)
-        # check if it's already been validated into an expected Schema
-        if type(validator) == type(Schema) and \
-                issubclass(validator, Schema) and \
-                isinstance(value, validator):
-            self._mapping[attr] = value.unwrap
-        else:
-            validated = self._validate(attr, validator, value)
-            self._mapping[attr] = value
-        object.__setattr__(self, attr, validated)
+        value = self._validate(attr, validator, value)
+        object.__setattr__(self, attr, value)
 
     def __delattr__(self, attr):
         if attr in self.required:
             raise RequiredField(attr)
         default = self._defaults[attr]
-        self._mapping[attr] = default
         object.__setattr__(self, attr, default)
 
     @property
     def unwrap(self):
-        return self._mapping
+        return unwrap(self)
 
     def __eq__(self, other):
         if isinstance(other, Schema):
@@ -236,8 +220,21 @@ class Schema(object):
 
     def __repr__(self):
         return '<{0} {1}>'.format(self.__class__.__name__,
-            ' '.join('{0}={1}'.format(k, getattr(self, k))
-            for k in sorted(chain(self.required, self.optional))))
+            ' '.join('{0}={1}'.format(field, repr(value)) for \
+            (field, value) in sorted(self.unwrap.iteritems())))
+
+def unwrap(x):
+    if isinstance(x, Schema):
+        return dict((field, unwrap(getattr(x, field)))
+            for field in chain(x.required, x.optional))
+    if isinstance(x, dict):
+        return dict((k, unwrap(v)) for (k, v) in x)
+    if isinstance(x, basestring):
+        return x
+    try:
+        return [unwrap(i) for i in x]
+    except:
+        return x
 
 def nonfalse(validator):
     '''
