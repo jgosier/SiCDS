@@ -19,7 +19,7 @@
 # USA
 
 from _couchdb import CouchStore#, CouchLogger
-#from _mongodb import MongoStore, MongoLogger
+from _mongodb import MongoStore#, MongoLogger
 from base import TmpStore, UrlInitable
 from loggers import TmpLogger, NullLogger, FileLogger, StdOutLogger
 from schema import Schema, SchemaError, many, t_str, withdefault
@@ -49,6 +49,7 @@ STORES = {
     None: TmpStore, # default if not specified
     'tmp': TmpStore,
     'couchdb': CouchStore,
+    'mongodb': MongoStore,
     }
 
 LOGGERS = {

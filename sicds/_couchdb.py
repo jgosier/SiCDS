@@ -18,7 +18,7 @@
 # Boston, MA  02110-1301
 # USA
 
-from base import DocStore, NoSuchKey, UpdateFailed, serialize
+from sicds.base import DocStore, NoSuchKey, UpdateFailed, serialize
 from string import digits, ascii_letters
 
 class CouchStore(DocStore):#, BaseLogger):
@@ -34,10 +34,6 @@ function (doc) {{
 '''.format(DocStore.kDIFS)
 
     def __init__(self, url):
-        '''
-        Base class for data stores backed by CouchDB. Opens a connection to
-        the CouchDB database specified in ``url``.
-        '''
         from couchdb import Server
         self.server = Server('http://{0}'.format(url.netloc))
         self.dbid = url.path.split('/')[1]
@@ -54,16 +50,10 @@ function (doc) {{
         self._dif_view.sync(self.db)
 
     def has(self, key, difs):
-        '''
-        Returns True iff difs is in the database.
-        '''
         s = serialize(key, difs)
         return bool(list(self._dif_view(self.db, key=s)))
 
     def add(self, key, difs):
-        '''
-        Adds a set of difs to the database.
-        '''
         doc = self._as_doc(key, difs)
         # try generating a docid based on python hash value of contents
         docid = hash(doc[self.kDIFS])

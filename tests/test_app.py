@@ -47,7 +47,7 @@ def test_config(store):
 test_configs = (
     test_config('tmp:'),
     test_config('couchdb://localhost:5984/sicds_test'),
-    #test_config('mongodb://localhost:27017/sicds_test'),
+    test_config('mongodb://localhost:27017/sicds_test'),
     )
 
 def next_str(prefix, counter):
@@ -176,7 +176,7 @@ tc_too_large = TestCase('reject too large', req_too_large,
 test_cases.append(tc_too_large)
 
 
-npassed = nfailed = 0
+npassed = nfailed = nerrors = 0
 failures_per_config = []
 for config in test_configs:
     config = SiCDSConfig(config)
@@ -187,11 +187,19 @@ for config in test_configs:
     app = SiCDSApp(config.keys, config.superkey, config.store, config.loggers)
     app = TestApp(app)
     for tc in test_cases:
-        resp = app.post(tc.path, tc.req, status=tc.status,
-            expect_errors=tc.expect_errors, headers={
-            'content-type': 'application/json'})
+        try:
+            resp = app.post(tc.path, tc.req, status=tc.status,
+                expect_errors=tc.expect_errors, headers={
+                'content-type': 'application/json'})
+        except Exception as e:
+            tc.got_resp = str(e)
+            nerrors += 1
+            failures.append(tc)
+            stdout.write('E')
+            import pdb; pdb.set_trace()
         if tc.status != resp.status_int or tc.resp not in resp:
-            tc.got_resp = resp.body
+            tc.got_resp = resp.body if tc.resp not in resp else \
+                    '{0} != {1}'.format(tc.status, resp.status_int)
             nfailed += 1
             failures.append(tc)
             stdout.write('F')
@@ -203,7 +211,8 @@ for config in test_configs:
     if failures:
         failures_per_config.append((store_type, failures))
 
-print('\n{0} test(s) passed, {1} test(s) failed.'.format(npassed, nfailed))
+print('\n{0} test(s) passed, {1} test(s) failed, {2} error(s).'.format(
+    npassed, nfailed, nerrors))
 
 whitespace = compile('\s+')
 def indented(text, indent=' '*6, width=60, collapse_whitespace=True):

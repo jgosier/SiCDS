@@ -18,51 +18,66 @@
 # Boston, MA  02110-1301
 # USA
 
-from base import DocDifStore, BaseLogger, UrlInitable
+from sicds.base import DocStore, as_tuples
 
-class MongoStore(UrlInitable):
+class MongoStore(DocStore):
+    kDIFS = 'difs'
+    _KEYPREFIX = u'KEY:'
+
     def __init__(self, url):
-        '''
-        Base class for data stores backed by MongoDB. Opens a connection to
-        the Mongo database and collection specified in ``url``.
-        '''
         from pymongo import Connection
         host = url.hostname
         port = url.port
         self.conn = Connection(host=host, port=port)
-        self.dbid, self.collectionid = url.path.split('/')[1:3]
+        self.dbid = url.path.split('/')[1]
         self.db = self.conn[self.dbid]
-        self.collection = self.db[self.collectionid]
+        self._bootstrap()
 
-class MongoDifStore(MongoStore, DocDifStore):
-    '''
-    Stores difs in a MongoDB instance.
-    '''
-    def __init__(self, url):
-        MongoStore.__init__(self, url)
-        self.collection.ensure_index(self._KEY, unique=True)
+    def _bootstrap(self):
+        self.keyc = self.db[self.kKEYS]
+        if not self.keyc.find_one():
+            self.keyc.insert({self.kKEYS: []})
+        self.difc_by_key = {}
+        for key in self.keyc.find_one()[self.kKEYS]:
+            difc = self.db[self._KEYPREFIX + key]
+            difc.ensure_index(self.kDIFS, unique=True)
+            self.difc_by_key[key] = difc
 
     def has(self, key, difs):
-        '''
-        Returns True iff difs is in the database.
-        '''
-        doc = self._as_doc(difs)
-        return bool(self.collection.find_one(doc))
+        doc = {self.kDIFS: as_tuples(difs)}
+        difc = self.difc_by_key[key]
+        return bool(difc.find_one(doc))
 
     def add(self, key, difs):
-        '''
-        Adds a set of difs to the database.
-        '''
-        doc = self._as_doc(difs)
-        self.collection.insert(doc)
+        doc = {self.kDIFS: as_tuples(difs)}
+        difc = self.difc_by_key[key]
+        difc.insert(doc)
+
+    def register_key(self, newkey):
+        if newkey in self.db.collection_names():
+            return False
+        difc = self.db[self._KEYPREFIX + newkey]
+        difc.ensure_index(self.kDIFS, unique=True)
+        self.difc_by_key[newkey] = difc
+        return True
+
+    def ensure_keys(self, keys):
+        kp = self._KEYPREFIX
+        n = len(kp)
+        newkeys = set(keys) - set(i[n:] for i in \
+            self.db.collection_names() if i.startswith(kp))
+        for key in newkeys:
+            difc = self.db[kp + key]
+            difc.ensure_index(self.kDIFS, unique=True)
+            self.difc_by_key[key] = difc
 
     def clear(self):
-        self.db.drop_collection(self.collection)
-        self.collection = self.db[self.collectionid]
+        self.conn.drop_database(self.db)
+        self._bootstrap()
 
-class MongoLogger(MongoStore, BaseLogger):
-    '''
-    Stores log entries in a MongoDB instance.
-    '''
-    def _store(self, entry):
-        self.collection.insert(entry)
+#class MongoLogger(MongoStore, BaseLogger):
+#    '''
+#    Stores log entries in a MongoDB instance.
+#    '''
+#    def _store(self, entry):
+#        self.collection.insert(entry)
