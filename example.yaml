@@ -13,11 +13,11 @@ keys:
 superkey: simsalabim
 
 ## backend for persistent storage
-store: tmp: # in memory (will be lost on restart!)
-#store: couchdb://localhost:5984/sicds
-#store: mongodb://localhost:27017/sicds
+store: 'tmp:' # in memory (will be lost on restart!)
+#store: 'couchdb://localhost:5984/sicds'
+#store: 'mongodb://localhost:27017/sicds'
 
 loggers:
-# - null: # suppress logging
-  - file:///dev/stdout
-  - store: # use whatever was configured as the store
+# - 'null:' # suppress logging
+  - 'file:///dev/stdout'
+  - 'store:' # use whatever was configured as the store
