@@ -24,7 +24,6 @@ utcnow = datetime.utcnow
 
 class StoreError(Exception): pass
 class UpdateFailed(StoreError): pass
-class NoSuchKey(StoreError): pass
 
 class UrlInitable(object):
     '''

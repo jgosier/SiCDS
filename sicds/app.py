@@ -84,8 +84,8 @@ class SiCDSApp(object):
         '''
         :param keys: clients must supply a key in this iterable to use the API
         :param superkey: new keys can be registered using this key
-        :param store:
-        :param loggers: a list of :class:`BaseLogger` implementations
+        :param store: a :class:`sicds.base.BaseStore` implementation
+        :param loggers: a list of :class:`sicds.base.BaseLogger` implementations
         '''
         self.keys = set(keys)
         self.superkey = superkey
@@ -102,7 +102,9 @@ class SiCDSApp(object):
         if data.superkey != self.superkey:
             raise exc.HTTPForbidden
         registered = self.store.register_key(data.newkey)
-        self.keys.add(data.newkey)
+        if registered:
+            self.keys.add(data.newkey)
+        registered = 'registered' if registered else 'already registered'
         resp = KeyRegResponse(key=data.newkey, registered=registered)
         return resp.unwrap
 

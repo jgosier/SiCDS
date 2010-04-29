@@ -18,7 +18,7 @@
 # Boston, MA  02110-1301
 # USA
 
-from sicds.base import BaseLogger, DocStore, NoSuchKey, UpdateFailed, serialize
+from sicds.base import BaseLogger, DocStore, UpdateFailed, serialize
 from string import digits, ascii_letters
 
 class CouchStore(DocStore):
@@ -104,19 +104,6 @@ function (doc) {{
                 self.db[self.KEYDOCID] = keydoc
             except Exception as e:
                 raise UpdateFailed(str(e))
-
-    #def unregister(self, key):
-    #    keydoc = self.db[self.KEYDOCID]
-    #    currkeys = keydoc[self.kKEYS]
-    #    try:
-    #        currkeys.remove(key)
-    #    except ValueError:
-    #        raise NoSuchKey(key)
-    #    else:
-    #        try:
-    #            self.db[self.KEYDOCID] = keydoc
-    #        except Exception as e:
-    #            raise UpdateFailed(str(e))
 
     def clear(self):
         if self.dbid in self.server:

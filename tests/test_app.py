@@ -30,7 +30,7 @@ from webtest import TestApp
 
 from sicds.app import SiCDSApp, IDRequest, IDResult, IDResponse, \
     KeyRegRequest, KeyRegResponse
-from sicds.config import SiCDSConfig
+from sicds.config import SiCDSConfig, UrlInitFailure
 
 TESTKEY = 'test_key'
 TESTSUPERKEY = 'test_superkey'
@@ -140,10 +140,17 @@ test_cases.extend((tc_u12, tc_d21))
 # test registering a new key
 NEWKEY = 'test_key2'
 req_keyreg = KeyRegRequest(superkey=TESTSUPERKEY, newkey=NEWKEY).unwrap
-res_keyreg = KeyRegResponse(key=NEWKEY, registered=True).unwrap
+res_keyreg = KeyRegResponse(key=NEWKEY, registered='registered').unwrap
 tc_keyreg = TestCase('register new key', req_keyreg, res_keyreg,
     path=SiCDSApp.R_REGISTER_KEY)
 test_cases.append(tc_keyreg)
+
+# test registering an existing key
+res_keyreg_existing = KeyRegResponse(key=NEWKEY,
+    registered='already registered').unwrap
+tc_keyreg_existing = TestCase('register existing key', req_keyreg, 
+    res_keyreg_existing, path=SiCDSApp.R_REGISTER_KEY)
+test_cases.append(tc_keyreg_existing)
 
 # existing content should look new to the client using the new key
 req1_newkey = dict(req1, key=NEWKEY)
@@ -179,7 +186,12 @@ test_cases.append(tc_too_large)
 npassed = nfailed = nerrors = 0
 failures_per_config = []
 for config in test_configs:
-    config = SiCDSConfig(config)
+    try:
+        config = SiCDSConfig(config)
+    except Exception as e:
+        print('Config error: {0}'.format(repr(e)))
+        print('Skipping...')
+        continue
     config.store.clear()
     store_type = config.store.__class__.__name__
     stdout.write('{0}:\t'.format(store_type))
