@@ -51,7 +51,7 @@ LOGGERS = {
     None: StdOutLogger, # default if not specified
     'null': NullLogger,
     'file': FileLogger,
-    'store': Reference('store'),
+    'store': Reference('store'), # use whatever was configured as the store
     }
 
 class ConfigError(SchemaError): pass
