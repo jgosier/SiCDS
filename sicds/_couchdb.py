@@ -46,20 +46,23 @@ function (doc) {{
         from couchdb import Server
         self.server = Server('http://{0}'.format(url.netloc))
         self.dbid = url.path.split('/')[1]
-        if self.dbid not in self.server:
-            self._bootstrap()
+        self._bootstrap()
 
     def _bootstrap(self):
-        self.server.create(self.dbid)
+        fresh = self.dbid not in self.server
+        if fresh:
+            self.server.create(self.dbid)
         self.db = self.server[self.dbid]
-        self.db[self.KEYDOCID] = {self.kKEYS: []}
+        if fresh:
+            self.db[self.KEYDOCID] = {self.kKEYS: []}
         from couchdb.design import ViewDefinition
         self._dif_view = ViewDefinition(self.DIFDESIGNDOCID,
             self.DIF_VIEW_NAME, self.DIF_VIEW_CODE)
         self._log_view = ViewDefinition(self.LOGDESIGNDOCID,
             self.LOG_VIEW_NAME, self.LOG_VIEW_CODE)
-        self._dif_view.sync(self.db)
-        self._log_view.sync(self.db)
+        if fresh:
+            self._dif_view.sync(self.db)
+            self._log_view.sync(self.db)
 
     def has(self, key, difs):
         s = serialize(key, difs)
