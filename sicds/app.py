@@ -165,7 +165,7 @@ class SiCDSApp(object):
             raise exc.HTTPBadRequest(repr(e))
 
 def main():
-    from config import SiCDSConfig, DEFAULTCONFIG
+    from sicds.config import SiCDSConfig, DEFAULTCONFIG
     from sys import argv
 
     def die(msg):
