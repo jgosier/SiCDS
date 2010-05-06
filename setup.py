@@ -16,6 +16,7 @@ setup(name='SiCDS',
       description='SwiftRiver Content Duplication Service',
       long_description=long_description,
       install_requires=[
+          'Python>=2.6.5',
           'PyYAML',
           'WebOb',
           ],
