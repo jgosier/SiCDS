@@ -1,22 +1,38 @@
-from setuptools import setup, find_packages
+from os.path import dirname, join
+from sys import exit, stderr, version_info
+
+def die(msg):
+    stderr.write(msg+'\n')
+    exit(1)
+
+if not ((2, 6, 5) <= version_info < (3,)):
+    die('Python>=2.6.5,<3 required.') 
+
+try:
+    from setuptools import setup, find_packages
+except ImportError:
+    die('Could not import setuptools. Install distribute? '
+        'http://packages.python.org/distribute/')
 
 version = '0.0.1dev'
 url = 'http://github.com/appfrica/SiCDS'
-
+desc_dir = 'docs'
+desc_filename = 'README.rst'
+desc_path = join(join(dirname(__file__), desc_dir), desc_filename)
 try:
-    import os
-    doc_dir = os.path.join(os.path.dirname(__file__), 'docs')
-    readme = open(os.path.join(doc_dir, 'README.rst'))
-    long_description = readme.read()
+    desc_file = open(desc_path)
 except IOError:
     long_description = 'Please see {0} for more info'.format(url)
+else:
+    long_description = desc_file.read()
+    desc_file.close()
 
 setup(name='SiCDS',
       version=version,
       description='SwiftRiver Content Duplication Service',
       long_description=long_description,
       install_requires=[
-          'Python>=2.6.5',
+          #'Python>=2.6.5,<3.0'
           'PyYAML',
           'WebOb',
           ],
