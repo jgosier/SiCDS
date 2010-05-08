@@ -97,13 +97,13 @@ def logger_from_url(url):
 
 class SiCDSConfig(Schema):
     required = {
-        'keys': many(t_uni, atleast=1),
         'superkey': t_uni,
         'store': store_from_url,
         }
     optional = {
         'host': withdefault(str, DEFAULTHOST),
         'port': withdefault(int, DEFAULTPORT),
+        'keys': withdefault(many(t_uni), []),
         'loggers': withdefault(many(logger_from_url), [StdOutLogger()]),
         }
 
