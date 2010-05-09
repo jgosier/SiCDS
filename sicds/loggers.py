@@ -49,6 +49,7 @@ class StdOutLogger(FileLogger):
 if __name__ == '__main__':
     import doctest
     doctest.testmod(optionflags=doctest.ELLIPSIS)
+    # XXX compare to config.py
     from sicds.base import UrlInitable
     print issubclass(BaseLogger, UrlInitable)
     print issubclass(FileLogger, BaseLogger)

@@ -20,10 +20,29 @@
 # USA
 
 from datetime import datetime
+from hashlib import sha1
 utcnow = datetime.utcnow
 
-class StoreError(Exception): pass
-class UpdateFailed(StoreError): pass
+def as_tuples(difs):
+    '''
+    Serializes an iterable of :class:`sicds.app.Dif` objects into a
+    canonical representation.
+    '''
+    return tuple(sorted(((u'type', d.type), (u'value', d.value)) for d in difs))
+
+def serialize(key, difs):
+    '''
+    Serializes a key and an iterable of :class:`sicds.app.Dif` objects into a
+    canonical representation.
+    '''
+    return ((u'key', key), as_tuples(difs))
+
+def hash(key, difs):
+    hashed = sha1(key)
+    for type, value in sorted((d.type, d.value) for d in difs):
+        hashed.update(type)
+        hashed.update(value)
+    return hashed.hexdigest()
 
 class UrlInitable(object):
     '''
@@ -38,7 +57,7 @@ class BaseLogger(UrlInitable):
     Abstract base class for logger objects.
     '''
     #: subclasses can index entries by this field if they support it
-    LOG_INDEX = 'timestamp'
+    LOG_INDEX = u'timestamp'
 
     def log(self, remote_addr, path, req, resp, success=True, **kw):
         entry = dict(
@@ -60,34 +79,31 @@ class BaseStore(BaseLogger):
     '''
     Abstract base class for Store objects.
     '''
-    def has(self, key, difs):
-        raise NotImplementedError
-
-    def add(self, key, difs):
+    def check(self, key, difs):
+        '''
+        Returns false if client with the given key has seen the given set of
+        difs before, otherwise returns true.
+        '''
         raise NotImplementedError
 
     def register_key(self, newkey):
+        '''
+        Returns False if ``newkey`` has already been registered, otherwise
+        registers ``newkey`` and returns True.
+        '''
         raise NotImplementedError
 
     def ensure_keys(self, keys):
+        '''
+        Registers each key in ``keys`` that has not been registered already.
+        '''
         raise NotImplementedError
 
     def clear(self):
+        '''
+        Clears contents of the store.
+        '''
         raise NotImplementedError
-
-def as_tuples(difs):
-    '''
-    Serializes an iterable of :class:`sicds.app.Dif` objects into a
-    canonical representation.
-    '''
-    return tuple(sorted((('type', d.type), ('value', d.value)) for d in difs))
-
-def serialize(key, difs):
-    '''
-    Serializes a key and an iterable of :class:`sicds.app.Dif` objects into a
-    canonical representation.
-    '''
-    return (('key', key), as_tuples(difs))
 
 class TmpStore(BaseStore):
     '''
@@ -98,13 +114,12 @@ class TmpStore(BaseStore):
         self.db = {}
         self._log_entries = []
 
-    def has(self, key, difs):
+    def check(self, key, difs):
         difs = as_tuples(difs)
-        return difs in self.db[key]
-
-    def add(self, key, difs):
-        difs = as_tuples(difs)
+        if difs in self.db[key]:
+            return False
         self.db[key].add(difs)
+        return True
 
     def register_key(self, newkey):
         if newkey in self.db:
@@ -128,15 +143,25 @@ class DocStore(BaseStore):
     Abstract base class for document-oriented stores such as CouchDB and
     MongoDB.
     '''
-    #: the key in the dif documents that maps to the value
-    kDIFS = 'difs_by_key'
+    #: the key in the dif documents that maps to the collection of difs by key
+    kDIFS = u'difs_by_key'
+
+    #: the key in the dif documents that maps to the added time
+    kTIMEADDED = u'time_added'
 
     #: the key in the api-key document that maps to the keys
-    kKEYS = 'keys'
+    kKEYS = u'keys'
+
+    @staticmethod
+    def _serialize(key, difs):
+        return serialize(key, difs)
 
     @classmethod
     def _as_doc(cls, key, difs):
-        return {cls.kDIFS: serialize(key, difs)}
+        return {
+            cls.kDIFS: cls._serialize(key, difs),
+            cls.kTIMEADDED: utcnow().isoformat(),
+            }
 
 if __name__ == '__main__':
     import doctest

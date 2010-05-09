@@ -80,7 +80,7 @@ def _instance_from_url(url, urlscheme2type):
             raise UnknownUrlScheme(scheme)
         if isinstance(Class, Reference):
             return Class
-        if not issubclass(Class, UrlInitable): # XXX
+        if not issubclass(Class, UrlInitable): # XXX compare to loggers.py
             from sicds.base import BaseLogger
             print issubclass(BaseLogger, UrlInitable)
             print issubclass(FileLogger, BaseLogger)

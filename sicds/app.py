@@ -125,10 +125,8 @@ class SiCDSApp(object):
             uniq = True
             for collection in item.difcollections:
                 difs = collection.difs
-                if self.store.has(key, difs):
+                if not self.store.check(key, difs):
                     uniq = False
-                else:
-                    self.store.add(key, difs)
             if uniq:
                 uniqitems.append(item.id)
             else:
@@ -162,7 +160,7 @@ class SiCDSApp(object):
                 req.body[:self.REQMAXBYTES], repr(e), success=False)
             if isinstance(e, exc.HTTPException):
                 raise
-            raise exc.HTTPBadRequest(repr(e))
+            raise exc.HTTPBadRequest(explanation=repr(e))
 
 def main():
     from sicds.config import SiCDSConfig, DEFAULTCONFIG

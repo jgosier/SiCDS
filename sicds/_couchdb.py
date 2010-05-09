@@ -18,24 +18,24 @@
 # Boston, MA  02110-1301
 # USA
 
-from sicds.base import BaseLogger, DocStore, UpdateFailed, serialize
+from sicds.base import BaseLogger, DocStore, hash, serialize
 from string import digits, ascii_letters
 
 class CouchStore(DocStore):
-    DIFDESIGNDOCID = 'difs'
-    LOGDESIGNDOCID = 'log'
-    KEYDOCID = 'keys'
+    DIFDESIGNDOCID = u'difs'
+    LOGDESIGNDOCID = u'log'
+    KEYDOCID = u'keys'
 
-    DIF_VIEW_NAME = 'difs_by_key'
-    DIF_VIEW_CODE = '''
+    DIF_VIEW_NAME = u'difs_by_key'
+    DIF_VIEW_CODE = u'''
 function (doc) {{
   if (doc.{0})
     emit(doc.{0}, null);
 }}
 '''.format(DocStore.kDIFS)
 
-    LOG_VIEW_NAME = 'entries'
-    LOG_VIEW_CODE = '''
+    LOG_VIEW_NAME = u'entries'
+    LOG_VIEW_CODE = u'''
 function (doc) {{
   if (doc.{0})
     emit(doc.{0}, null);
@@ -60,27 +60,23 @@ function (doc) {{
             self.DIF_VIEW_NAME, self.DIF_VIEW_CODE)
         self._log_view = ViewDefinition(self.LOGDESIGNDOCID,
             self.LOG_VIEW_NAME, self.LOG_VIEW_CODE)
-        if fresh:
-            self._dif_view.sync(self.db)
-            self._log_view.sync(self.db)
+        self._dif_view.sync(self.db)
+        self._log_view.sync(self.db)
 
-    def has(self, key, difs):
-        s = serialize(key, difs)
-        return bool(list(self._dif_view(self.db, key=s)))
-
-    def add(self, key, difs):
+    def check(self, key, difs):
+        s = self._serialize(key, difs)
+        if list(self._dif_view(self.db, key=s)):
+            return False
         doc = self._as_doc(key, difs)
-        # try generating a docid based on python hash value of contents
-        docid = hash(doc[self.kDIFS])
-        docid = change_base(docid) # use large base for shorter id
-        try:
-            if docid not in self.db:
-                self.db[docid] = doc
-            else:
-                # let couch assign the id (will be much longer)
-                self.db.save(doc)
-        except Exception as e:
-            raise UpdateFailed(str(e))
+        # try generating a docid based on hash value of contents
+        docid = hash(key, difs) # sha1 hex digest
+        docid = change_base(int(docid, 16)) # use large base for shorter id
+        if docid not in self.db:
+            self.db[docid] = doc
+        else:
+            # let couch assign the id, will be much longer
+            self.db.save(doc)
+        return True
 
     def register_key(self, newkey):
         keydoc = self.db[self.KEYDOCID]
@@ -88,11 +84,8 @@ function (doc) {{
         if newkey in currkeys:
             return False
         currkeys.append(newkey)
-        try:
-            self.db[self.KEYDOCID] = keydoc
-            return True
-        except Exception as e:
-            raise UpdateFailed(str(e))
+        self.db[self.KEYDOCID] = keydoc
+        return True
 
     def ensure_keys(self, keys):
         keydoc = self.db[self.KEYDOCID]
@@ -103,10 +96,7 @@ function (doc) {{
                 currkeys.append(key)
                 updated = True
         if updated:
-            try:
-                self.db[self.KEYDOCID] = keydoc
-            except Exception as e:
-                raise UpdateFailed(str(e))
+            self.db[self.KEYDOCID] = keydoc
 
     def clear(self):
         if self.dbid in self.server:
@@ -114,10 +104,7 @@ function (doc) {{
         self._bootstrap()
 
     def _append_log(self, entry):
-        try:
-            self.db.save(entry)
-        except Exception as e:
-            raise UpdateFailed(str(e))
+        self.db.save(entry)
 
 def change_base(x, charset=digits+ascii_letters, base=None):
     '''
@@ -125,11 +112,12 @@ def change_base(x, charset=digits+ascii_letters, base=None):
     ``base=None`` base will be set to ``len(charset)`` resulting in the
     shortest possible string for the given charset.
 
-    >>> max32 = 2**32 - 1
-    >>> change_base(max32, base=16)
-    'ffffffff'
-    >>> change_base(max32)
-    '4GFfc3'
+    >>> uint32max = 2**32 - 1
+    >>> as_hex = change_base(uint32max, base=16)
+    >>> as_hex == hex(uint32max).lstrip('0x')
+    True
+    >>> len(change_base(uint32max, base=60)) < len(as_hex)
+    True
 
     '''
     if x == 0:

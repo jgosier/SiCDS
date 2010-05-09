@@ -22,13 +22,13 @@ from sicds.base import DocStore, as_tuples
 
 class MongoStore(DocStore):
     #: the name of the collection that stores log entries
-    cLOG = 'logentries'
+    cLOG = u'logentries'
     #: the name of the collection that stores the single api-keys document
-    cKEYS = 'keys'
+    cKEYS = u'keys'
     #: collections of difs are named by this prefix and their corresponding key
-    cKEYPREFIX = 'KEY:'
+    cKEYPREFIX = u'KEY:'
     #: the key in the dif documents that maps to the value
-    kDIFS = 'difs'
+    kDIFS = u'difs'
 
     def __init__(self, url):
         from pymongo import Connection
@@ -51,20 +51,24 @@ class MongoStore(DocStore):
             difc.ensure_index(self.kDIFS, unique=True)
             self.difc_by_key[key] = difc
 
-    def has(self, key, difs):
-        doc = {self.kDIFS: as_tuples(difs)}
-        difc = self.difc_by_key[key]
-        return bool(difc.find_one(doc))
+    @staticmethod
+    def _serialize(key, difs):
+        return as_tuples(difs)
 
-    def add(self, key, difs):
-        doc = {self.kDIFS: as_tuples(difs)}
+    def check(self, key, difs):
+        s = self._serialize(key, difs)
         difc = self.difc_by_key[key]
+        if list(difc.find({self.kDIFS: s}, limit=1)):
+            return False
+        doc = self._as_doc(key, difs)
         difc.insert(doc)
+        return True
 
     def register_key(self, newkey):
-        if newkey in self.db.collection_names():
+        key = self.cKEYPREFIX + newkey
+        if key in self.db.collection_names():
             return False
-        difc = self.db[self.cKEYPREFIX + newkey]
+        difc = self.db[key]
         difc.ensure_index(self.kDIFS, unique=True)
         self.difc_by_key[newkey] = difc
         return True

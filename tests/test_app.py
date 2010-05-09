@@ -85,10 +85,6 @@ class TestCase(object):
         self.path = path
         self.status = status
 
-    @property
-    def expect_errors(self):
-        return self.status >= 400
-
 test_cases = []
 
 # test that duplication identification works as expected
@@ -183,7 +179,7 @@ tc_too_large = TestCase('reject too large', req_too_large,
 test_cases.append(tc_too_large)
 
 
-npassed = nfailed = nerrors = 0
+npassed = nfailed = 0
 failures_per_config = []
 for config in test_configs:
     try:
@@ -199,32 +195,24 @@ for config in test_configs:
     app = SiCDSApp(config.keys, config.superkey, config.store, config.loggers)
     app = TestApp(app)
     for tc in test_cases:
-        try:
-            resp = app.post(tc.path, tc.req, status=tc.status,
-                expect_errors=tc.expect_errors, headers={
-                'content-type': 'application/json'})
-        except Exception as e:
-            tc.got_resp = str(e)
-            nerrors += 1
+        resp = app.post(tc.path, tc.req, status=tc.status,
+            expect_errors=True, # if there's an error don't cover it up
+            headers={'content-type': 'application/json'})
+        if tc.status != resp.status_int or tc.resp not in resp:
+            tc.got_resp = resp.body if tc.resp not in resp else \
+                    '{0} != {1}'.format(tc.status, resp.status_int)
+            nfailed += 1
             failures.append(tc)
-            stdout.write('E')
+            stdout.write('F')
         else:
-            if tc.status != resp.status_int or tc.resp not in resp:
-                tc.got_resp = resp.body if tc.resp not in resp else \
-                        '{0} != {1}'.format(tc.status, resp.status_int)
-                nfailed += 1
-                failures.append(tc)
-                stdout.write('F')
-            else:
-                npassed += 1
-                stdout.write('.')
+            npassed += 1
+            stdout.write('.')
         stdout.flush()
     stdout.write('\n')
     if failures:
         failures_per_config.append((store_type, failures))
 
-print('\n{0} test(s) passed, {1} test(s) failed, {2} error(s).'.format(
-    npassed, nfailed, nerrors))
+print('\n{0} test(s) passed, {1} failed.'.format(npassed, nfailed))
 
 whitespace = compile('\s+')
 def indented(text, indent=' '*6, width=60, collapse_whitespace=True):
@@ -232,7 +220,7 @@ def indented(text, indent=' '*6, width=60, collapse_whitespace=True):
         text = ' '.join(whitespace.split(text))
     return '\n'.join((indent + text[i:i+width] for i in range(0, len(text), width)))
 
-if nfailed:
+if failures_per_config:
     print('\nFailure summary:')
     for fs in failures_per_config:
         print('\n  For {0}:'.format(fs[0]))
