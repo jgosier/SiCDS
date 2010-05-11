@@ -101,8 +101,8 @@ class SiCDSConfig(Schema):
         'store': store_from_url,
         }
     optional = {
-        'host': withdefault(str, DEFAULTHOST),
-        'port': withdefault(int, DEFAULTPORT),
+        'host': str,
+        'port': withdefault(int, ''),
         'keys': withdefault(many(t_uni), []),
         'loggers': withdefault(many(logger_from_url), [StdOutLogger()]),
         }
