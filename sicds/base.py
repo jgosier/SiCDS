@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # Copyright (C) 2010 Ushahidi Inc. <jon@ushahidi.com>,
 # Joshua Bronson <jabronson@gmail.com>, and contributors
 #
@@ -19,30 +18,12 @@
 # Boston, MA  02110-1301
 # USA
 
+from base64 import urlsafe_b64encode
 from datetime import datetime
 from hashlib import sha1
+from itertools import imap
+from operator import attrgetter
 utcnow = datetime.utcnow
-
-def as_tuples(difs):
-    '''
-    Serializes an iterable of :class:`sicds.app.Dif` objects into a
-    canonical representation.
-    '''
-    return tuple(sorted(((u'type', d.type), (u'value', d.value)) for d in difs))
-
-def serialize(key, difs):
-    '''
-    Serializes a key and an iterable of :class:`sicds.app.Dif` objects into a
-    canonical representation.
-    '''
-    return ((u'key', key), as_tuples(difs))
-
-def hash(key, difs):
-    hashed = sha1(key)
-    for type, value in sorted((d.type, d.value) for d in difs):
-        hashed.update(type)
-        hashed.update(value)
-    return hashed.hexdigest()
 
 class UrlInitable(object):
     '''
@@ -59,19 +40,21 @@ class BaseLogger(UrlInitable):
     #: subclasses can index entries by this field if they support it
     LOG_INDEX = u'timestamp'
 
-    def log(self, remote_addr, path, req, resp, success=True, **kw):
-        entry = dict(
+    def log(self, req, resp, success, **kw):
+        record = dict(
             timestamp=utcnow().isoformat(),
-            remote_addr=remote_addr,
-            path=path,
-            req=req,
-            resp=resp,
+            request=dict(
+                remote_addr=req.remote_addr,
+                path=req.path_info,
+                body=getattr(req, 'logged_body', None)),
+            response=dict(
+                status=resp.status,
+                body=getattr(resp, 'logged_body', None)),
             success=success,
-            **kw
-            )
-        self._append_log(entry)
+            **kw)
+        self._add_log_record(record)
 
-    def _append_log(self, entry):
+    def _add_log_record(self, record):
         raise NotImplementedError
 
 
@@ -79,12 +62,41 @@ class BaseStore(BaseLogger):
     '''
     Abstract base class for Store objects.
     '''
-    def check(self, key, difs):
-        '''
-        Returns false if client with the given key has seen the given set of
-        difs before, otherwise returns true.
-        '''
+    @staticmethod
+    def _hash(key, difs):
+        hashed = sha1(key)
+        for type, value in sorted((d.type, d.value) for d in difs):
+            hashed.update(type)
+            hashed.update(value)
+        return urlsafe_b64encode(hashed.digest())
+
+    def __contains__(self, hashed):
         raise NotImplementedError
+
+    @classmethod
+    def _new_difs_record(cls, id, key, difs):
+        raise NotImplementedError
+
+    def _add_difs_records(self, records):
+        raise NotImplementedError
+
+    def check(self, key, item):
+        '''
+        Returns false if client with the given key has seen the given item
+        before, otherwise returns true.
+        '''
+        uniq = True
+        newrecords = []
+        for difs in imap(attrgetter('difs'), item.difcollections):
+            id = self._hash(key, difs)
+            if id in self:
+                uniq = False
+            else:
+                record = self._new_difs_record(id, key, difs)
+                newrecords.append(record)
+        if newrecords:
+            self._add_difs_records(newrecords)
+        return uniq
 
     def register_key(self, newkey):
         '''
@@ -110,26 +122,15 @@ class DocStore(BaseStore):
     Abstract base class for document-oriented stores such as CouchDB and
     MongoDB.
     '''
-    #: the key in the dif documents that maps to the collection of difs by key
-    kDIFS = u'difs_by_key'
-
-    #: the key in the dif documents that maps to the added time
-    kTIMEADDED = u'time_added'
-
     #: the key in the api-key document that maps to the keys
     kKEYS = u'keys'
 
-    @staticmethod
-    def _serialize(key, difs):
-        return serialize(key, difs)
-
     @classmethod
-    def _as_doc(cls, key, difs):
+    def _new_difs_record(cls, id, key, difs):
         return {
-            cls.kDIFS: cls._serialize(key, difs),
-            cls.kTIMEADDED: utcnow().isoformat(),
+            u'_id': id,
+            u'time_added': utcnow().isoformat(),
+            # comment out the following to avoid storing them:
+            u'key': key,
+            u'difs': [dif.unwrap for dif in difs],
             }
-
-if __name__ == '__main__':
-    import doctest
-    doctest.testmod(optionflags=doctest.ELLIPSIS)

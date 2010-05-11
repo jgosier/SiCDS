@@ -172,7 +172,7 @@ tc_extra_fields = TestCase('reject extra fields', req_extra_fields,
     )
 test_cases.append(tc_extra_fields)
 
-req_too_large = {'too_large': ' '*SiCDSApp.REQMAXBYTES}
+req_too_large = {'too_large': '-'*SiCDSApp.REQMAXBYTES}
 tc_too_large = TestCase('reject too large', req_too_large,
     status=exc.HTTPRequestEntityTooLarge().status_int,
     )

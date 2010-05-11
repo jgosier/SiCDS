@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # Copyright (C) 2010 Ushahidi Inc. <jon@ushahidi.com>,
 # Joshua Bronson <jabronson@gmail.com>, and contributors
 #
@@ -36,7 +35,7 @@ class FileLogger(BaseLogger):
     def __init__(self, url):
         self.file = open(url.path, 'a')
 
-    def _append_log(self, entry):
+    def _add_log_record(self, entry):
         self.file.write('{0}\n'.format(entry))
 
 class StdOutLogger(FileLogger):
@@ -45,12 +44,3 @@ class StdOutLogger(FileLogger):
     '''
     def __init__(self, *args):
         self.file = stdout
-
-if __name__ == '__main__':
-    import doctest
-    doctest.testmod(optionflags=doctest.ELLIPSIS)
-    # XXX compare to config.py
-    from sicds.base import UrlInitable
-    print issubclass(BaseLogger, UrlInitable)
-    print issubclass(FileLogger, BaseLogger)
-    print issubclass(FileLogger, UrlInitable)

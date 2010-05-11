@@ -4,4 +4,4 @@
 .DS_Store
 dist
 docs/build/
-config.yaml
+config.json

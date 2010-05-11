@@ -18,9 +18,9 @@
 # Boston, MA  02110-1301
 # USA
 
-from sicds.base import BaseStore, as_tuples
-from sicds.stores.couchdb_dbg import CouchStoreDbg
-from sicds.stores.mongodb_dbg import MongoStoreDbg
+from sicds.base import BaseStore
+from sicds.stores.couch import CouchStore
+from sicds.stores.mongo import MongoStore
 
 class TmpStore(BaseStore):
     '''
@@ -28,29 +28,31 @@ class TmpStore(BaseStore):
     Everything is lost when the object is destroyed.
     '''
     def __init__(self, *args):
-        self.db = {}
+        self.db = set()
+        self.keys = set()
         self._log_entries = []
 
-    def check(self, key, difs):
-        difs = as_tuples(difs)
-        if difs in self.db[key]:
-            return False
-        self.db[key].add(difs)
-        return True
+    def __contains__(self, id):
+        return id in self.db
+
+    @classmethod
+    def _new_difs_record(cls, id, key, difs):
+        return id
+
+    def _add_difs_records(self, records):
+        self.db.update(records)
 
     def register_key(self, newkey):
-        if newkey in self.db:
+        if newkey in self.keys:
             return False
-        self.db[newkey] = set()
+        self.keys.add(newkey)
         return True
 
     def ensure_keys(self, keys):
-        for key in keys:
-            if key not in self.db:
-                self.db[key] = set()
+        self.keys.update(keys)
 
     def clear(self):
         self.db.clear()
 
-    def _append_log(self, entry):
-        self._log_entries.append(entry)
+    def _add_log_record(self, record):
+        self._log_entries.append(record)

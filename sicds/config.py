@@ -23,7 +23,7 @@ from sicds.base import UrlInitable
 from sicds.loggers import NullLogger, FileLogger, StdOutLogger
 from sicds.schema import Reference, Schema, SchemaError, many, \
     withdefault, t_uni
-from sicds.stores import TmpStore, CouchStoreDbg, MongoStoreDbg
+from sicds.stores import TmpStore, CouchStore, MongoStore
 from urlparse import urlsplit
 
 DEFAULTCONFIG = dict(
@@ -32,20 +32,15 @@ DEFAULTCONFIG = dict(
     keys=['sicds_default_key'],
     superkey='sicds_default_superkey',
     store='tmp:',
-    loggers=['file:///dev/stdout'],
     )
 
 STORES = {
-    None: TmpStore, # default if not specified
     'tmp': TmpStore,
-    #'couchdb': CouchStore,
-    #'mongodb': MongoStore,
-    'couchdb': CouchStoreDbg,
-    'mongodb': MongoStoreDbg,
+    'couchdb': CouchStore,
+    'mongodb': MongoStore,
     }
 
 LOGGERS = {
-    None: StdOutLogger, # default if not specified
     'null': NullLogger,
     'file': FileLogger,
     'store': Reference('store'), # use whatever was configured as the store
@@ -68,8 +63,8 @@ def _instance_from_url(url, urlscheme2type):
     # assume urlsplit correctly handles novel schemes
     # this requires at least Python 2.6.5!
     # see http://bugs.python.org/issue7904
-    url = urlsplit(url) if url else None
-    scheme = url.scheme if url else None
+    url = urlsplit(url)
+    scheme = url.scheme
     try:
         try:
             Class = urlscheme2type[scheme]
@@ -77,11 +72,6 @@ def _instance_from_url(url, urlscheme2type):
             raise UnknownUrlScheme(scheme)
         if isinstance(Class, Reference):
             return Class
-        if not issubclass(Class, UrlInitable): # XXX compare to loggers.py
-            from sicds.base import BaseLogger
-            print issubclass(BaseLogger, UrlInitable)
-            print issubclass(FileLogger, BaseLogger)
-            print issubclass(FileLogger, UrlInitable)
         return Class(url)
     except:
         raise UrlInitFailure(url) 

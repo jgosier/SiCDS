@@ -19,8 +19,8 @@
 
 // backend for persistent storage
 "store": "tmp:", // in memory (will be lost on restart!)
-//store: "couchdb://localhost:5984/sicds",
-//store: "mongodb://localhost:27017/sicds",
+//"store": "couchdb://localhost:5984/sicds",
+//"store": "mongodb://localhost:27017/sicds",
 
 "loggers": [
   "null:", // suppress logging

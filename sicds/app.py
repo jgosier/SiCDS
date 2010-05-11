@@ -19,7 +19,7 @@
 # Boston, MA  02110-1301
 # USA
 
-from simplejson import JSONDecodeError, load, dumps
+from simplejson import JSONDecodeError, load, loads, dumps
 from sicds.schema import Schema, SchemaError, many, t_uni
 from urlparse import urlsplit
 from webob import Response, exc
@@ -122,12 +122,7 @@ class SiCDSApp(object):
         uniqitems = []
         dupitems = []
         for item in items:
-            uniq = True
-            for collection in item.difcollections:
-                difs = collection.difs
-                if not self.store.check(key, difs):
-                    uniq = False
-            if uniq:
+            if self.store.check(key, item):
                 uniqitems.append(item.id)
             else:
                 dupitems.append(item.id)
@@ -143,27 +138,35 @@ class SiCDSApp(object):
 
     @wsgify
     def __call__(self, req):
+        resp = None
+        success = False
         try:
             if req.path_info not in self._routes:
                 raise exc.HTTPNotFound
             if req.method != 'POST':
                 raise exc.HTTPMethodNotAllowed(explanation='Only POST allowed')
             if req.content_length > self.REQMAXBYTES:
+                req.logged_body = req.body_file.read(self.REQMAXBYTES) + '...'
                 raise exc.HTTPRequestEntityTooLarge(explanation='Request max '
                     'size is {0} bytes'.format(self.REQMAXBYTES))
-            json = load(req.body_file)
+            reqjson = loads(req.body)
+            req.logged_body = reqjson
             handler = self._routes[req.path_info]
-            resp = handler(self, json)
-            self.log(req.remote_addr, req.path_info, json, resp, success=True)
-            return Response(content_type='application/json', body=dumps(resp))
+            respjson = handler(self, reqjson)
+            resp = Response(body=dumps(respjson), content_type='application/json')
+            resp.logged_body = respjson
+            success = True
         except Exception as e:
-            self.log(req.remote_addr, req.path_info, 
-                req.body[:self.REQMAXBYTES], repr(e), success=False)
             if isinstance(e, exc.HTTPException):
-                raise
-            if isinstance(e, (JSONDecodeError, SchemaError)):
-                raise exc.HTTPBadRequest(explanation=repr(e))
-            raise exc.HTTPInternalServerError(explanation=repr(e))
+                resp = e
+            elif isinstance(e, (JSONDecodeError, SchemaError)):
+                resp = exc.HTTPBadRequest(explanation=repr(e))
+            else:
+                resp = exc.HTTPInternalServerError(explanation=repr(e))
+            resp.logged_body = resp.explanation
+        finally:
+            self.log(req, resp, success)
+            return resp
 
 def main():
     from sicds.config import SiCDSConfig, DEFAULTCONFIG

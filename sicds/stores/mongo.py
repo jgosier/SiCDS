@@ -18,17 +18,15 @@
 # Boston, MA  02110-1301
 # USA
 
-from sicds.base import DocStore, as_tuples
+from sicds.base import DocStore
 
-class MongoStoreDbg(DocStore):
+class MongoStore(DocStore):
     #: the name of the collection that stores log entries
     cLOG = u'logentries'
     #: the name of the collection that stores the single api-keys document
     cKEYS = u'keys'
-    #: collections of difs are named by this prefix and their corresponding key
-    cKEYPREFIX = u'KEY:'
-    #: the key in the dif documents that maps to the value
-    kDIFS = u'difs'
+    #: the name of the collection that stores the dif documents
+    cDIFS = u'difs'
 
     def __init__(self, url):
         from pymongo import Connection
@@ -45,47 +43,36 @@ class MongoStoreDbg(DocStore):
         self.keyc = self.db[self.cKEYS]
         if not self.keyc.find_one():
             self.keyc.insert({self.kKEYS: []})
-        self.difc_by_key = {}
-        for key in self.keyc.find_one()[self.kKEYS]:
-            difc = self.db[self.cKEYPREFIX + key]
-            difc.ensure_index(self.kDIFS, unique=True)
-            self.difc_by_key[key] = difc
+        self.difc = self.db[self.cDIFS]
 
-    @staticmethod
-    def _serialize(key, difs):
-        return as_tuples(difs)
+    def __contains__(self, id):
+        return bool(self.difc.find_one({u'_id': id}))
 
-    def check(self, key, difs):
-        s = self._serialize(key, difs)
-        difc = self.difc_by_key[key]
-        if list(difc.find({self.kDIFS: s}, limit=1)):
-            return False
-        doc = self._as_doc(key, difs)
-        difc.insert(doc)
-        return True
+    def _add_difs_records(self, records):
+        self.difc.insert(records, safe=True, check_keys=False)
 
     def register_key(self, newkey):
-        key = self.cKEYPREFIX + newkey
-        if key in self.db.collection_names():
+        keysdoc = self.keyc.find_one()
+        curkeys = keysdoc[self.kKEYS]
+        if newkey in curkeys:
             return False
-        difc = self.db[key]
-        difc.ensure_index(self.kDIFS, unique=True)
-        self.difc_by_key[newkey] = difc
+        curkeys.append(newkey)
+        keysdoc[self.kKEYS] = curkeys
+        self.keyc.save(keysdoc, safe=True)
         return True
 
     def ensure_keys(self, keys):
-        kp = self.cKEYPREFIX
-        n = len(kp)
-        newkeys = set(keys) - set(i[n:] for i in \
-            self.db.collection_names() if i.startswith(kp))
-        for key in newkeys:
-            difc = self.db[kp + key]
-            difc.ensure_index(self.kDIFS, unique=True)
-            self.difc_by_key[key] = difc
+        keysdoc = self.keyc.find_one()
+        curkeys = keysdoc[self.kKEYS]
+        newkeys = set(keys) - set(curkeys)
+        if newkeys:
+            curkeys.extend(newkeys)
+            keysdoc[self.kKEYS] = curkeys
+            self.keyc.save(keysdoc, safe=True)
 
     def clear(self):
         self.conn.drop_database(self.db)
         self._bootstrap()
 
-    def _append_log(self, entry):
-        self.logc.insert(entry)
+    def _add_log_record(self, record):
+        self.logc.insert(record)
