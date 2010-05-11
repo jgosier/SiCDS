@@ -19,23 +19,18 @@
 # Boston, MA  02110-1301
 # USA
 
-from sicds._couchdb import CouchStore
-from sicds._mongodb import MongoStore
-from sicds.base import TmpStore, UrlInitable
+from sicds.base import UrlInitable
 from sicds.loggers import NullLogger, FileLogger, StdOutLogger
 from sicds.schema import Reference, Schema, SchemaError, many, \
     withdefault, t_uni
+from sicds.stores import TmpStore, CouchStoreDbg, MongoStoreDbg
 from urlparse import urlsplit
 
-DEFAULTKEY = 'sicds_default_key'
-DEFAULTSUPERKEY = 'sicds_default_superkey'
-DEFAULTHOST = 'localhost'
-DEFAULTPORT = 8625
 DEFAULTCONFIG = dict(
-    host=DEFAULTHOST,
-    port=DEFAULTPORT,
-    keys=[DEFAULTKEY],
-    superkey=DEFAULTSUPERKEY,
+    host='localhost',
+    port=8625,
+    keys=['sicds_default_key'],
+    superkey='sicds_default_superkey',
     store='tmp:',
     loggers=['file:///dev/stdout'],
     )
@@ -43,8 +38,10 @@ DEFAULTCONFIG = dict(
 STORES = {
     None: TmpStore, # default if not specified
     'tmp': TmpStore,
-    'couchdb': CouchStore,
-    'mongodb': MongoStore,
+    #'couchdb': CouchStore,
+    #'mongodb': MongoStore,
+    'couchdb': CouchStoreDbg,
+    'mongodb': MongoStoreDbg,
     }
 
 LOGGERS = {

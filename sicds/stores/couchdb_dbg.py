@@ -21,7 +21,7 @@
 from sicds.base import BaseLogger, DocStore, hash, serialize
 from string import digits, ascii_letters
 
-class CouchStore(DocStore):
+class CouchStoreDbg(DocStore):
     DIFDESIGNDOCID = u'difs'
     LOGDESIGNDOCID = u'log'
     KEYDOCID = u'keys'

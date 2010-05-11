@@ -33,8 +33,8 @@ setup(name='SiCDS',
       long_description=long_description,
       install_requires=[
           #'Python>=2.6.5,<3.0'
-          'PyYAML',
-          'WebOb',
+          'WebOb==0.9.8',
+          'simplejson==2.1.1',
           ],
       extras_require = {
           'CouchDB': ["CouchDB==0.7"],

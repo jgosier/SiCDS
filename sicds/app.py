@@ -19,8 +19,8 @@
 # Boston, MA  02110-1301
 # USA
 
-from json import loads, dumps
-from sicds.schema import Schema, InvalidField, many, t_uni
+from simplejson import JSONDecodeError, load, dumps
+from sicds.schema import Schema, SchemaError, many, t_uni
 from urlparse import urlsplit
 from webob import Response, exc
 from webob.dec import wsgify
@@ -100,7 +100,7 @@ class SiCDSApp(object):
     def _register(self, json):
         data = KeyRegRequest(json)
         if data.superkey != self.superkey:
-            raise exc.HTTPForbidden
+            raise exc.HTTPForbidden(explanation='Unauthorized superkey')
         registered = self.store.register_key(data.newkey)
         if registered:
             self.keys.add(data.newkey)
@@ -111,7 +111,7 @@ class SiCDSApp(object):
     def _identify(self, json):
         data = IDRequest(json)
         if data.key not in self.keys:
-            raise exc.HTTPForbidden
+            raise exc.HTTPForbidden(explanation='Unauthorized key')
         uniq, dup = self._process(data.key, data.contentItems)
         results = [IDResult({'id': i, 'result': 'unique'}) for i in uniq] + \
                   [IDResult({'id': i, 'result': 'duplicate'}) for i in dup]
@@ -147,10 +147,11 @@ class SiCDSApp(object):
             if req.path_info not in self._routes:
                 raise exc.HTTPNotFound
             if req.method != 'POST':
-                raise exc.HTTPMethodNotAllowed
+                raise exc.HTTPMethodNotAllowed(explanation='Only POST allowed')
             if req.content_length > self.REQMAXBYTES:
-                raise exc.HTTPRequestEntityTooLarge
-            json = loads(req.body)
+                raise exc.HTTPRequestEntityTooLarge(explanation='Request max '
+                    'size is {0} bytes'.format(self.REQMAXBYTES))
+            json = load(req.body_file)
             handler = self._routes[req.path_info]
             resp = handler(self, json)
             self.log(req.remote_addr, req.path_info, json, resp, success=True)
@@ -160,7 +161,9 @@ class SiCDSApp(object):
                 req.body[:self.REQMAXBYTES], repr(e), success=False)
             if isinstance(e, exc.HTTPException):
                 raise
-            raise exc.HTTPBadRequest(explanation=repr(e))
+            if isinstance(e, (JSONDecodeError, SchemaError)):
+                raise exc.HTTPBadRequest(explanation=repr(e))
+            raise exc.HTTPInternalServerError(explanation=repr(e))
 
 def main():
     from sicds.config import SiCDSConfig, DEFAULTCONFIG
@@ -172,12 +175,11 @@ def main():
 
     if argv[1:]:
         configpath = argv[1]
-        from yaml import load, YAMLError
         try:
             with open(configpath) as configfile:
                 config = load(configfile)
-        except YAMLError:
-            die('Could not parse yaml')
+        except JSONDecodeError:
+            die('Could not parse configuration json')
         except IOError:
             die('Could not open file {0}'.format(configpath))
     else:

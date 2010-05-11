@@ -20,7 +20,7 @@
 
 from sicds.base import DocStore, as_tuples
 
-class MongoStore(DocStore):
+class MongoStoreDbg(DocStore):
     #: the name of the collection that stores log entries
     cLOG = u'logentries'
     #: the name of the collection that stores the single api-keys document

@@ -105,39 +105,6 @@ class BaseStore(BaseLogger):
         '''
         raise NotImplementedError
 
-class TmpStore(BaseStore):
-    '''
-    Stores difs in memory.
-    Everything is lost when the object is destroyed.
-    '''
-    def __init__(self, *args):
-        self.db = {}
-        self._log_entries = []
-
-    def check(self, key, difs):
-        difs = as_tuples(difs)
-        if difs in self.db[key]:
-            return False
-        self.db[key].add(difs)
-        return True
-
-    def register_key(self, newkey):
-        if newkey in self.db:
-            return False
-        self.db[newkey] = set()
-        return True
-
-    def ensure_keys(self, keys):
-        for key in keys:
-            if key not in self.db:
-                self.db[key] = set()
-
-    def clear(self):
-        self.db.clear()
-
-    def _append_log(self, entry):
-        self._log_entries.append(entry)
-
 class DocStore(BaseStore):
     '''
     Abstract base class for document-oriented stores such as CouchDB and

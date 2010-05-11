@@ -7,12 +7,12 @@ Requirements
 ------------
 
 - `Python 2.6.5 <http://www.python.org/download/releases/2.6.5/>`_
-- `WebOb <http://pypi.python.org/pypi/WebOb>`_
-- `PyYAML <http://pypi.python.org/pypi/PyYAML>`_
+- `WebOb 0.9.8 <http://pypi.python.org/pypi/WebOb/0.9.8>`_
+- `simplejson 2.1.1 <http://pypi.python.org/pypi/simplejson/2.1.1>`_
 
 If no persistent storage is available, SiCDS can store data in memory.
 Otherwise, SiCDS can be pointed at a persistent datastore via configuration
-(see example.yaml). Currently the following databases are supported:
+(see example-config.json). Currently the following databases are supported:
 
 - `CouchDB <http://couchdb.apache.org/>`_ (requires
   `couchdb-python <http://pypi.python.org/pypi/CouchDB>`_)

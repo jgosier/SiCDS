@@ -21,7 +21,6 @@
 
 from functools import wraps
 from itertools import chain
-from sicds.base import UrlInitable
 
 class SchemaError(Exception): pass
 class RequiredField(SchemaError): pass

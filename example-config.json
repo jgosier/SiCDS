@@ -1,0 +1,30 @@
+/*
+ * SiCDS Example Configuration
+ *
+ * must remove comments before using :\
+ */
+
+{
+// server address 
+"host": "localhost",
+"port": 8625,
+
+// clients must supply one of these keys to use the API
+"keys": [
+  "abracadabra"
+  ],
+
+// new keys can be registered using this superkey
+"superkey": "simsalabim",
+
+// backend for persistent storage
+"store": "tmp:", // in memory (will be lost on restart!)
+//store: "couchdb://localhost:5984/sicds",
+//store: "mongodb://localhost:27017/sicds",
+
+"loggers": [
+  "null:", // suppress logging
+  "file:///dev/stdout", // log to specified file
+  "store:" // log to whatever was configured as the store
+  ]
+}
