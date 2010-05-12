@@ -60,6 +60,12 @@ class BaseLogger(UrlInitable):
     def _add_log_record(self, record):
         raise NotImplementedError
 
+    def iterlog(self):
+        '''
+        Subclasses can optionally override this to return an iterator over
+        logged records.
+        '''
+        raise NotImplementedError
 
 class BaseStore(BaseLogger):
     '''
@@ -76,8 +82,8 @@ class BaseStore(BaseLogger):
     def _filter_old(self, ids):
         raise NotImplementedError
 
-    @classmethod
-    def _new_difs_record(cls, id, key, difs):
+    @staticmethod
+    def _new_difs_record(cls, id):
         raise NotImplementedError
 
     def _add_difs_records(self, records):
@@ -125,8 +131,8 @@ class DocStore(BaseStore):
     #: the key in the api-key document that maps to the keys
     kKEYS = u'keys'
 
-    @classmethod
-    def _new_difs_record(cls, id):#, key, difs):
+    @staticmethod
+    def _new_difs_record(id):#, key, difs):
         return {
             u'_id': id,
             u'time_added': utcnow().isoformat(),

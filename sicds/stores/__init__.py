@@ -19,18 +19,18 @@
 # USA
 
 from sicds.base import BaseStore
+from sicds.loggers import TmpLogger
 from sicds.stores.couch import CouchStore
 from sicds.stores.mongo import MongoStore
 
-class TmpStore(BaseStore):
+class TmpStore(BaseStore, TmpLogger):
     '''
-    Stores difs in memory.
-    Everything is lost when the object is destroyed.
+    Stores records in memory. All records are lost when the object is destroyed.
     '''
     def __init__(self, *args):
+        TmpLogger.__init__(self)
         self.db = set()
         self.keys = set()
-        self._log_entries = []
 
     def _filter_old(self, ids):
         return list(self.db.intersection(set(ids)))
@@ -54,6 +54,3 @@ class TmpStore(BaseStore):
 
     def clear(self):
         self.db.clear()
-
-    def _add_log_record(self, record):
-        self._log_entries.append(record)

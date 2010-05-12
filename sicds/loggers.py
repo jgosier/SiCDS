@@ -28,6 +28,19 @@ class NullLogger(BaseLogger):
     def log(self, *args, **kw):
         pass
 
+class TmpLogger(BaseLogger):
+    '''
+    Stores log records in memory. Records are lost when the object is destroyed.
+    '''
+    def __init__(self, *args, **kw):
+        self._log_records = []
+
+    def _add_log_record(self, record):
+        self._log_records.append(record)
+
+    def iterlog(self):
+        return iter(self._log_records)
+
 class FileLogger(BaseLogger):
     '''
     Opens a file at the path specified in ``url`` and logs entries to it.
