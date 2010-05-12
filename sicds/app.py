@@ -188,7 +188,7 @@ class SiCDSApp(object):
                     getattr(resp, 'logged_body', None)))
             return resp
 
-def main():
+def getconfig():
     from sicds.config import SiCDSConfig, DEFAULTCONFIG
     from sys import argv
 
@@ -209,9 +209,12 @@ def main():
         import doctest; doctest.testmod(optionflags=doctest.ELLIPSIS)
         config = DEFAULTCONFIG
         print('Warning: Using default configuration. Data will not be persisted.')
+    return SiCDSConfig(config)
 
-    config = SiCDSConfig(config)
-    app = SiCDSApp(config.superkey, config.store, config.loggers, keys=config.keys)
+def makeapp(config):
+    return SiCDSApp(config.superkey, config.store, config.loggers, keys=config.keys)
+
+def serve_forever(app, config):
     from wsgiref.simple_server import make_server
     httpd = make_server(config.host, config.port, app)
     print('Serving on port {0}'.format(config.port))
@@ -219,6 +222,11 @@ def main():
         httpd.serve_forever()
     except KeyboardInterrupt:
         pass
+
+def main():
+    config = getconfig()
+    app = makeapp(config)
+    serve_forever(app, config)
 
 if __name__ == '__main__':
     main()

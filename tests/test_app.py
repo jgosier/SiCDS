@@ -19,6 +19,7 @@
 # Boston, MA  02110-1301
 # USA
 
+from collections import namedtuple
 from functools import partial
 from itertools import count
 from json import dumps, loads
@@ -31,12 +32,14 @@ from webtest import TestApp
 from sicds.app import SiCDSApp, IDRequest, IDResult, IDResponse, \
     KeyRegRequest, KeyRegResponse
 from sicds.config import SiCDSConfig, UrlInitFailure
+from sicds.loggers import TmpLogger
+from sicds.shell import startshell
 
 TESTKEY = 'test_key'
 TESTSUPERKEY = 'test_superkey'
 TESTPORT = 8635
 
-def test_config(store):
+def make_config(store):
     return dict(port=TESTPORT, keys=[TESTKEY], superkey=TESTSUPERKEY,
         store=store, loggers=['store:'])
 
@@ -44,10 +47,10 @@ def test_config(store):
 # comment out any that aren't installed on your system.
 # warning: test data stores will be cleared every time tests are run
 # make sure these configs don't point to anything important!
-test_configs = (
-    test_config('tmp:'),
-    test_config('couchdb://localhost:5984/sicds_test'),
-    test_config('mongodb://localhost:27017/sicds_test'),
+testconfigs = (
+    make_config('tmp:'),
+    make_config('couchdb://localhost:5984/sicds_test'),
+    make_config('mongodb://localhost:27017/sicds_test'),
     )
 
 def next_str(prefix, counter):
@@ -85,7 +88,7 @@ class TestCase(object):
         self.path = path
         self.status = status
 
-test_cases = []
+testcases = []
 
 # test that duplication identification works as expected
 # first time we see an item it should be unique,
@@ -95,7 +98,7 @@ res1_u = make_resp(req1, result='unique')
 res1_d = make_resp(req1, result='duplicate')
 tc_u = TestCase('item1 unique', req1, res1_u)
 tc_d = TestCase('item1 now duplicate', req1, res1_d)
-test_cases.extend((tc_u, tc_d))
+testcases.extend((tc_u, tc_d))
 
 # test multi-collection identification
 # if we see an item with multiple collections, each of which we haven't seen
@@ -116,7 +119,7 @@ res4_d = make_resp(req4, result='duplicate')
 tc_u2 = TestCase('[c1, c2] collections unique', req2, res2_u)
 tc_d2 = TestCase('[c2, c3] collections duplicate', req3, res3_d)
 tc_d3 = TestCase('[c3] collection duplicate', req4, res4_d)
-test_cases.extend((tc_u2, tc_d2, tc_d3))
+testcases.extend((tc_u2, tc_d2, tc_d3))
 
 # test that order of difs does not matter
 d1 = make_dif()
@@ -131,7 +134,7 @@ res12_u = make_resp(req12, result='unique')
 res21_d = make_resp(req21, result='duplicate')
 tc_u12 = TestCase('[dif1, dif2] unique', req12, res12_u)
 tc_d21 = TestCase('[dif2, dif1] duplicate (order does not matter)', req21, res21_d)
-test_cases.extend((tc_u12, tc_d21))
+testcases.extend((tc_u12, tc_d21))
 
 # test registering a new key
 NEWKEY = 'test_key2'
@@ -139,49 +142,50 @@ req_keyreg = KeyRegRequest(superkey=TESTSUPERKEY, newkey=NEWKEY).unwrap
 res_keyreg = KeyRegResponse(key=NEWKEY, result='registered').unwrap
 tc_keyreg = TestCase('register new key', req_keyreg, res_keyreg,
     path=SiCDSApp.R_REGISTER_KEY)
-test_cases.append(tc_keyreg)
+testcases.append(tc_keyreg)
 
 # test registering an existing key
 res_keyreg_existing = KeyRegResponse(key=NEWKEY,
     result='already registered').unwrap
 tc_keyreg_existing = TestCase('register existing key', req_keyreg, 
     res_keyreg_existing, path=SiCDSApp.R_REGISTER_KEY)
-test_cases.append(tc_keyreg_existing)
+testcases.append(tc_keyreg_existing)
 
 # existing content should look new to the client using the new key
 req1_newkey = dict(req1, key=NEWKEY)
 res1_newkey = dict(res1_u, key=NEWKEY)
 tc_newkey_u = TestCase('item1 unique to new client', req1_newkey, res1_newkey)
-test_cases.append(tc_newkey_u)
+testcases.append(tc_newkey_u)
 
 # check that various bad requests give error responses
 req_badkey = dict(req1, key='bad_key')
 tc_badkey = TestCase('reject bad key', req_badkey,
     status=exc.HTTPForbidden().status_int,
     )
-test_cases.append(tc_badkey)
+testcases.append(tc_badkey)
 
 tc_missing_fields = TestCase('reject missing fields', {},
     status=exc.HTTPBadRequest().status_int,
     )
-test_cases.append(tc_missing_fields)
+testcases.append(tc_missing_fields)
 
 req_extra_fields = dict(make_req(), extra='extra')
 tc_extra_fields = TestCase('reject extra fields', req_extra_fields,
     status=exc.HTTPBadRequest().status_int,
     )
-test_cases.append(tc_extra_fields)
+testcases.append(tc_extra_fields)
 
 req_too_large = {'too_large': '-'*SiCDSApp.REQMAXBYTES}
 tc_too_large = TestCase('reject too large', req_too_large,
     status=exc.HTTPRequestEntityTooLarge().status_int,
     )
-test_cases.append(tc_too_large)
+testcases.append(tc_too_large)
 
 
 npassed = nfailed = 0
-failures_per_config = []
-for config in test_configs:
+FailureEnv = namedtuple('FailureEnv', 'storetype failures config app log')
+failed_envs = []
+for config in testconfigs:
     try:
         config = SiCDSConfig(config)
     except Exception as e:
@@ -189,12 +193,14 @@ for config in test_configs:
         print('Skipping...')
         continue
     config.store.clear()
-    store_type = config.store.__class__.__name__
-    stdout.write('{0}:\t'.format(store_type))
-    failures = []
+    tmplogger = TmpLogger()
+    config.loggers.append(tmplogger)
+    storetype = config.store.__class__.__name__
+    stdout.write('{0}:\t'.format(storetype))
     app = SiCDSApp(config.superkey, config.store, config.loggers, keys=config.keys)
     app = TestApp(app)
-    for tc in test_cases:
+    failures = {}
+    for i, tc in enumerate(testcases):
         resp = app.post(tc.path, tc.req, status=tc.status,
             expect_errors=True, # if there's an error don't cover it up
             headers={'content-type': 'application/json'})
@@ -202,7 +208,7 @@ for config in test_configs:
             tc.got_resp = resp.body if tc.resp not in resp else \
                     '{0} != {1}'.format(tc.status, resp.status_int)
             nfailed += 1
-            failures.append(tc)
+            failures[i] = tc
             stdout.write('F')
         else:
             npassed += 1
@@ -210,7 +216,8 @@ for config in test_configs:
         stdout.flush()
     stdout.write('\n')
     if failures:
-        failures_per_config.append((store_type, failures))
+        failed_envs.append(FailureEnv(storetype, failures, config, app,
+            list(tmplogger.iterlog())))
 
 print('\n{0} test(s) passed, {1} failed.'.format(npassed, nfailed))
 
@@ -220,16 +227,21 @@ def indented(text, indent=' '*6, width=60, collapse_whitespace=True):
         text = ' '.join(whitespace.split(text))
     return '\n'.join((indent + text[i:i+width] for i in range(0, len(text), width)))
 
-if failures_per_config:
+if failed_envs:
     print('\nFailure summary:')
-    for fs in failures_per_config:
-        print('\n  For {0}:'.format(fs[0]))
-        for tc in fs[1]:
-            print('\n    test:')
-            print('      {0}'.format(tc.desc))
+    for storetype, failures, _, _, _ in failed_envs:
+        print('\n  For {0}:'.format(storetype))
+        for i, tc in failures.iteritems():
+            print('\n    test {0}: "{1}"'.format(i, tc.desc))
             print('    request:')
             print(indented(tc.req, collapse_whitespace=False))
             print('    expected response:')
             print(indented(tc.resp))
             print('    got response:')
             print(indented(tc.got_resp))
+
+    interactive = raw_input('\n\nExamine environment in interactive session (y/N)? ')
+    if interactive.lower() == 'y':
+        print('Entering interactive session.')
+        locals_ = dict(testcases=testcases, failed_envs=failed_envs)
+        startshell(locals_=locals_)
