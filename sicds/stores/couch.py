@@ -18,9 +18,7 @@
 # Boston, MA  02110-1301
 # USA
 
-from operator import itemgetter
-from itertools import imap
-from sicds.base import BaseLogger, DocStore
+from sicds.base import DocStore
 
 class CouchStore(DocStore):
     KEYDOCID = u'keys'
@@ -31,7 +29,7 @@ function (doc) {{
   if (doc.{0})
     emit(doc.{0}, null);
 }}
-'''.format(BaseLogger.LOG_INDEX)
+'''.format(DocStore.LOG_INDEX)
 
     def __init__(self, url):
         from couchdb import Server
@@ -51,11 +49,16 @@ function (doc) {{
             self.LOG_VIEW_NAME, self.LOG_VIEW_CODE)
         self._log_view.sync(self.db)
 
-    def __contains__(self, id):
-        return id in self.db
+    def _filter_old(self, ids):
+        return [r.id for r in self.db.view('_all_docs', keys=ids)
+                if r.id is not None]
 
     def _add_difs_records(self, records):
-        assert all(imap(itemgetter(0), self.db.update(records)))
+        results = self.db.update(records)
+        failures = [(id, exc) for (successful, id, exc)
+                    in results if not successful]
+        if failures:
+            raise Exception(failures) # XXX
 
     def register_key(self, newkey):
         keydoc = self.db[self.KEYDOCID]
@@ -74,7 +77,7 @@ function (doc) {{
         if newkeys:
             curkeys.extend(newkeys)
             keysdoc[self.kKEYS] = curkeys
-            assert self.db.update([keysdoc])[0]
+            assert self.db.update([keysdoc])[0] # XXX
 
     def clear(self):
         if self.dbid in self.server:

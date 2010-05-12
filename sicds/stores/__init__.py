@@ -32,11 +32,11 @@ class TmpStore(BaseStore):
         self.keys = set()
         self._log_entries = []
 
-    def __contains__(self, id):
-        return id in self.db
+    def _filter_old(self, ids):
+        return list(self.db.intersection(set(ids)))
 
     @classmethod
-    def _new_difs_record(cls, id, key, difs):
+    def _new_difs_record(cls, id):
         return id
 
     def _add_difs_records(self, records):

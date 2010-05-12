@@ -45,8 +45,9 @@ class MongoStore(DocStore):
             self.keyc.insert({self.kKEYS: []})
         self.difc = self.db[self.cDIFS]
 
-    def __contains__(self, id):
-        return bool(self.difc.find_one({u'_id': id}))
+    def _filter_old(self, ids):
+        return [i[u'_id'] for i in
+            self.difc.find({u'_id': {'$in': ids}}, fields=[u'_id'])]
 
     def _add_difs_records(self, records):
         self.difc.insert(records, safe=True, check_keys=False)

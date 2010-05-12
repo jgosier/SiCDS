@@ -20,6 +20,7 @@
 
 from base64 import urlsafe_b64encode
 from datetime import datetime
+from functools import partial
 from hashlib import sha1
 from itertools import imap
 from operator import attrgetter
@@ -70,7 +71,7 @@ class BaseStore(BaseLogger):
             hashed.update(value)
         return urlsafe_b64encode(hashed.digest())
 
-    def __contains__(self, hashed):
+    def _filter_old(self, ids):
         raise NotImplementedError
 
     @classmethod
@@ -85,18 +86,14 @@ class BaseStore(BaseLogger):
         Returns false if client with the given key has seen the given item
         before, otherwise returns true.
         '''
-        uniq = True
-        newrecords = []
-        for difs in imap(attrgetter('difs'), item.difcollections):
-            id = self._hash(key, difs)
-            if id in self:
-                uniq = False
-            else:
-                record = self._new_difs_record(id, key, difs)
-                newrecords.append(record)
-        if newrecords:
+        alldifs = map(attrgetter('difs'), item.difcollections)
+        hashes = map(partial(self._hash, key), alldifs)
+        old = self._filter_old(hashes)
+        new = set(hashes) - set(old)
+        if new:
+            newrecords = map(self._new_difs_record, new)
             self._add_difs_records(newrecords)
-        return uniq
+        return not old
 
     def register_key(self, newkey):
         '''
@@ -126,11 +123,10 @@ class DocStore(BaseStore):
     kKEYS = u'keys'
 
     @classmethod
-    def _new_difs_record(cls, id, key, difs):
+    def _new_difs_record(cls, id):#, key, difs):
         return {
             u'_id': id,
             u'time_added': utcnow().isoformat(),
-            # comment out the following to avoid storing them:
-            u'key': key,
-            u'difs': [dif.unwrap for dif in difs],
+            #u'key': key,
+            #u'difs': [dif.unwrap for dif in difs],
             }
