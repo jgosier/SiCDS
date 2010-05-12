@@ -72,6 +72,10 @@ def _instance_from_url(url, urlscheme2type):
             raise UnknownUrlScheme(scheme)
         if isinstance(Class, Reference):
             return Class
+        try:
+            assert issubclass(Class, UrlInitable)
+        except:
+            print('Warning: {0} is not a UrlInitable'.format(Class))
         return Class(url)
     except:
         raise UrlInitFailure(url) 
