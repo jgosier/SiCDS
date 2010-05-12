@@ -140,10 +140,10 @@ database (e.g. "sicds_dev") in it if it doesn't exist already.
 
 
 SiCDS comes with automated tests exercising the API and verifying correct
-results with all the supported data stares.  To run the tests, first install
+results with all the supported data stores.  To run the tests, first install
 `WebTest <http://pypi.python.org/pypi/WebTest>`_, locate the test runner in
 the ``tests/`` directory, comment out any test configurations you don't want
-to run (such as those for data stores you don't have installed), and then
+to run (such as those for data stores you don't have running), and then
 run the file. You should see something like::
 
     $ tests/test_app.py
@@ -163,5 +163,5 @@ server (e.g. Apache + `mod_wsgi <http://code.google.com/p/modwsgi/>`_,
 <http://www.tornadoweb.org/>`_, et al.). The server should provide further
 documentation on its configuration. You may have to write a standard WSGI
 application factory to create a configured ``SiCDSApp`` instance. The
-``main`` function in ``app.py`` provides an example with the reference WSGI
+``main`` function in ``app.py`` provides an example using the reference WSGI
 server built into Python. SiCDS has currently only been tested with this server.

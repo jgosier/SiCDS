@@ -1,2 +1,2 @@
-include example.yaml
+include example-config.json
 recursive-include docs *.rst *.txt
