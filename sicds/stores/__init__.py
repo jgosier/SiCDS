@@ -35,8 +35,8 @@ class TmpStore(BaseStore):
     def _filter_old(self, ids):
         return list(self.db.intersection(set(ids)))
 
-    @classmethod
-    def _new_difs_record(cls, id):
+    @staticmethod
+    def _new_difs_record(id):
         return id
 
     def _add_difs_records(self, records):
@@ -50,6 +50,7 @@ class TmpStore(BaseStore):
 
     def ensure_keys(self, keys):
         self.keys.update(keys)
+        return iter(self.keys)
 
     def clear(self):
         self.db.clear()

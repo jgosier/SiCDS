@@ -136,14 +136,14 @@ test_cases.extend((tc_u12, tc_d21))
 # test registering a new key
 NEWKEY = 'test_key2'
 req_keyreg = KeyRegRequest(superkey=TESTSUPERKEY, newkey=NEWKEY).unwrap
-res_keyreg = KeyRegResponse(key=NEWKEY, registered='registered').unwrap
+res_keyreg = KeyRegResponse(key=NEWKEY, result='registered').unwrap
 tc_keyreg = TestCase('register new key', req_keyreg, res_keyreg,
     path=SiCDSApp.R_REGISTER_KEY)
 test_cases.append(tc_keyreg)
 
 # test registering an existing key
 res_keyreg_existing = KeyRegResponse(key=NEWKEY,
-    registered='already registered').unwrap
+    result='already registered').unwrap
 tc_keyreg_existing = TestCase('register existing key', req_keyreg, 
     res_keyreg_existing, path=SiCDSApp.R_REGISTER_KEY)
 test_cases.append(tc_keyreg_existing)
@@ -192,7 +192,7 @@ for config in test_configs:
     store_type = config.store.__class__.__name__
     stdout.write('{0}:\t'.format(store_type))
     failures = []
-    app = SiCDSApp(config.keys, config.superkey, config.store, config.loggers)
+    app = SiCDSApp(config.superkey, config.store, config.loggers, keys=config.keys)
     app = TestApp(app)
     for tc in test_cases:
         resp = app.post(tc.path, tc.req, status=tc.status,

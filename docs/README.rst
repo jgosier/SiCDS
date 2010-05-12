@@ -83,11 +83,11 @@ To register a new API key, POST to /register with a valid superkey like so::
 
 The response will be something like::
 
-    {"key": "simsalabim", "registered": "registered"}
+    {"key": "simsalabim", "result": "registered"}
 
 or possibly::
 
-    {"key": "simsalabim", "registered": "already registered"}
+    {"key": "simsalabim", "result": "already registered"}
 
 
 A request made with an unauthorized API key will result in a 403 Forbidden

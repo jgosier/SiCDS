@@ -81,6 +81,7 @@ function (doc) {{
             successful, id, exc = self.db.update([keysdoc])[0]
             if not successful:
                 raise StoreError({id: exc})
+        return iter(curkeys)
 
     def clear(self):
         if self.dbid in self.server:

@@ -106,7 +106,8 @@ class BaseStore(BaseLogger):
 
     def ensure_keys(self, keys):
         '''
-        Registers each key in ``keys`` that has not been registered already.
+        Registers each key in ``keys`` that has not been registered already
+        and then returns an iterable of all currently registered keys.
         '''
         raise NotImplementedError
 

@@ -30,7 +30,7 @@ class KeyRegRequest(Schema):
     required = {'superkey': t_uni, 'newkey': t_uni}
 
 class KeyRegResponse(Schema):
-    required = {'key': t_uni, 'registered': t_uni}
+    required = {'key': t_uni, 'result': t_uni}
 
 class Dif(Schema):
     required = {'type': t_uni, 'value': t_uni}
@@ -81,19 +81,24 @@ class SiCDSApp(object):
     #: max size of request body. bigger will be refused.
     REQMAXBYTES = 1024
 
-    def __init__(self, keys, superkey, store, loggers):
+    def __init__(self, superkey, store, loggers, keys=[]):
         '''
-        :param keys: clients must supply a key in this iterable to use the API
-        :param superkey: new keys can be registered using this key
+        :param superkey: clients must supply an authorized key to use the API.
+            New API keys can be registered using this superkey, e.g.::
+
+                > POST /register {"superkey": "abracadabra", "newkey": "foo"}
+                < {"key": "foo", "result": "registered"}
+
         :param store: a :class:`sicds.base.BaseStore` implementation
         :param loggers: a list of :class:`sicds.base.BaseLogger` implementations
+        :param keys: SiCDSApp can optionally be initialized with these keys,
+            which it will synchronize with the store so they are persisted.
+
         '''
-        self.keys = set(keys)
         self.superkey = superkey
         self.store = store
         self.loggers = loggers
-        if self.keys:
-            self.store.ensure_keys(self.keys)
+        self.keys = set(self.store.ensure_keys(keys))
 
     def log(self, *args, **kw):
         for logger in self.loggers:
@@ -103,11 +108,11 @@ class SiCDSApp(object):
         data = KeyRegRequest(json)
         if data.superkey != self.superkey:
             raise exc.HTTPForbidden(explanation='Unauthorized superkey')
-        registered = self.store.register_key(data.newkey)
-        if registered:
+        result = self.store.register_key(data.newkey)
+        if result:
             self.keys.add(data.newkey)
-        registered = 'registered' if registered else 'already registered'
-        resp = KeyRegResponse(key=data.newkey, registered=registered)
+        result = '{0}registered'.format('' if result else 'already ')
+        resp = KeyRegResponse(key=data.newkey, result=result)
         return resp.unwrap
 
     def _identify(self, json):
@@ -206,7 +211,7 @@ def main():
         print('Warning: Using default configuration. Data will not be persisted.')
 
     config = SiCDSConfig(config)
-    app = SiCDSApp(config.keys, config.superkey, config.store, config.loggers)
+    app = SiCDSApp(config.superkey, config.store, config.loggers, keys=config.keys)
     from wsgiref.simple_server import make_server
     httpd = make_server(config.host, config.port, app)
     print('Serving on port {0}'.format(config.port))

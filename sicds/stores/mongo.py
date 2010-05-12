@@ -70,6 +70,7 @@ class MongoStore(DocStore):
             curkeys.extend(newkeys)
             keysdoc[self.kKEYS] = curkeys
             self.keyc.save(keysdoc, safe=True)
+        return iter(curkeys)
 
     def clear(self):
         self.conn.drop_database(self.db)
