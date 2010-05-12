@@ -26,6 +26,8 @@ from itertools import imap
 from operator import attrgetter
 utcnow = datetime.utcnow
 
+class StoreError(Exception): pass
+
 class UrlInitable(object):
     '''
     Base class for objects whose __init__ methods take a urlparse.SplitResult

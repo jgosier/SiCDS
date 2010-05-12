@@ -18,7 +18,7 @@
 # Boston, MA  02110-1301
 # USA
 
-from sicds.base import DocStore
+from sicds.base import DocStore, StoreError
 
 class CouchStore(DocStore):
     KEYDOCID = u'keys'
@@ -55,10 +55,11 @@ function (doc) {{
 
     def _add_difs_records(self, records):
         results = self.db.update(records)
-        failures = [(id, exc) for (successful, id, exc)
-                    in results if not successful]
-        if failures:
-            raise Exception(failures) # XXX
+        failed = dict((id, exc) for (successful, id, exc)
+                    in results if not successful)
+        if failed:
+            added = [id for (successful, id, _) in results if successful]
+            raise StoreError({'added': added, 'failed': failed})
 
     def register_key(self, newkey):
         keydoc = self.db[self.KEYDOCID]
@@ -77,7 +78,9 @@ function (doc) {{
         if newkeys:
             curkeys.extend(newkeys)
             keysdoc[self.kKEYS] = curkeys
-            assert self.db.update([keysdoc])[0] # XXX
+            successful, id, exc = self.db.update([keysdoc])[0]
+            if not successful:
+                raise StoreError({id: exc})
 
     def clear(self):
         if self.dbid in self.server:

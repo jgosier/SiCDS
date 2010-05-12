@@ -19,8 +19,9 @@
 # Boston, MA  02110-1301
 # USA
 
-from simplejson import JSONDecodeError, load, loads, dumps
+from sicds.base import StoreError
 from sicds.schema import Schema, SchemaError, many, t_uni
+from simplejson import JSONDecodeError, load, loads, dumps
 from urlparse import urlsplit
 from webob import Response, exc
 from webob.dec import wsgify
@@ -91,7 +92,8 @@ class SiCDSApp(object):
         self.superkey = superkey
         self.store = store
         self.loggers = loggers
-        self.store.ensure_keys(self.keys)
+        if self.keys:
+            self.store.ensure_keys(self.keys)
 
     def log(self, *args, **kw):
         for logger in self.loggers:
@@ -119,14 +121,22 @@ class SiCDSApp(object):
         return resp.unwrap
 
     def _process(self, key, items):
-        uniqitems = []
-        dupitems = []
+        uniqs = []
+        dups = []
+        excs = {}
         for item in items:
-            if self.store.check(key, item):
-                uniqitems.append(item.id)
+            try:
+                uniq = self.store.check(key, item)
+            except Exception as e:
+                excs[item.id] = e
             else:
-                dupitems.append(item.id)
-        return uniqitems, dupitems
+                if uniq:
+                    uniqs.append(item.id)
+                else:
+                    dups.append(item.id)
+        if excs:
+            raise StoreError(dict(uniq=uniqs, dup=dups, exc=excs))
+        return uniqs, dups
 
     #: routes
     R_IDENTIFY = '/'
@@ -165,7 +175,12 @@ class SiCDSApp(object):
                 resp = exc.HTTPInternalServerError(explanation=repr(e))
             resp.logged_body = resp.explanation
         finally:
-            self.log(req, resp, success)
+            try:
+                self.log(req, resp, success)
+            except Exception as e:
+                resp = exc.HTTPInternalServerError(explanation='Log failure: {0}\n'
+                    'req: {1}\nresp: {2}'.format(repr(e), getattr(req, 'logged_body', None),
+                    getattr(resp, 'logged_body', None)))
             return resp
 
 def main():
