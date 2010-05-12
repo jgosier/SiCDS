@@ -1,0 +1,4 @@
+-e git+git://github.com/jab/SiCDS.git#egg=SiCDS
+
+WebOb==0.9.8
+simplejson==2.1.1
