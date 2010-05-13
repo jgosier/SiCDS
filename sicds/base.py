@@ -18,7 +18,6 @@
 # Boston, MA  02110-1301
 # USA
 
-from base64 import urlsafe_b64encode
 from datetime import datetime
 from functools import partial
 from hashlib import sha1
@@ -77,16 +76,17 @@ class BaseStore(BaseLogger):
         for type, value in sorted((d.type, d.value) for d in difs):
             hashed.update(type)
             hashed.update(value)
-        return urlsafe_b64encode(hashed.digest())
-
-    def _filter_old(self, ids):
-        raise NotImplementedError
+        return hashed.digest()
 
     @staticmethod
     def _new_difs_record(cls, id):
         raise NotImplementedError
 
     def _add_difs_records(self, records):
+        '''
+        Adds the given records to the store, returns true if none of them
+        is already in the store.
+        '''
         raise NotImplementedError
 
     def check(self, key, item):
@@ -96,12 +96,8 @@ class BaseStore(BaseLogger):
         '''
         alldifs = map(attrgetter('difs'), item.difcollections)
         hashes = map(partial(self._hash, key), alldifs)
-        old = self._filter_old(hashes)
-        new = set(hashes) - set(old)
-        if new:
-            newrecords = map(self._new_difs_record, new)
-            self._add_difs_records(newrecords)
-        return not old
+        records = map(self._new_difs_record, hashes)
+        return self._add_difs_records(records)
 
     def register_key(self, newkey):
         '''

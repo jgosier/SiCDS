@@ -18,6 +18,7 @@
 # Boston, MA  02110-1301
 # USA
 
+from base64 import urlsafe_b64encode
 from sicds.base import DocStore, StoreError
 
 class CouchStore(DocStore):
@@ -49,17 +50,13 @@ function (doc) {{
             self.LOG_VIEW_NAME, self.LOG_VIEW_CODE)
         self._log_view.sync(self.db)
 
-    def _filter_old(self, ids):
-        return [r.id for r in self.db.view('_all_docs', keys=ids)
-                if r.id is not None]
+    @staticmethod
+    def _hash(key, difs):
+        return urlsafe_b64encode(DocStore._hash(key, difs))
 
     def _add_difs_records(self, records):
         results = self.db.update(records)
-        failed = dict((id, exc) for (successful, id, exc)
-                    in results if not successful)
-        if failed:
-            added = [id for (successful, id, _) in results if successful]
-            raise StoreError({'added': added, 'failed': failed})
+        return all(successful for (successful, id, rev_exc) in results)
 
     def register_key(self, newkey):
         keydoc = self.db[self.KEYDOCID]

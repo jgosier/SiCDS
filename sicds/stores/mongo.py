@@ -30,6 +30,8 @@ class MongoStore(DocStore):
 
     def __init__(self, url):
         from pymongo import Connection
+        from pymongo.binary import Binary
+        self.__class__.Binary = Binary
         host = url.hostname
         port = url.port
         self.conn = Connection(host=host, port=port)
@@ -45,12 +47,20 @@ class MongoStore(DocStore):
             self.keyc.insert({self.kKEYS: []})
         self.difc = self.db[self.cDIFS]
 
-    def _filter_old(self, ids):
-        return [i[u'_id'] for i in
-            self.difc.find({u'_id': {'$in': ids}}, fields=[u'_id'])]
+    @classmethod
+    def _hash(cls, key, difs):
+        return cls.Binary(DocStore._hash(key, difs))
 
     def _add_difs_records(self, records):
-        self.difc.insert(records, safe=True, check_keys=False)
+        # mongodb does not yet support bulk insert of docs with potentially
+        # duplicate keys: http://jira.mongodb.org/browse/SERVER-509
+        uniq = True
+        for r in records:
+            try:
+                self.difc.insert(r, check_keys=False, safe=True)
+            except:
+                uniq = False
+        return uniq
 
     def register_key(self, newkey):
         keysdoc = self.keyc.find_one()
