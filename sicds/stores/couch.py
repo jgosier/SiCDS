@@ -22,7 +22,6 @@ from base64 import urlsafe_b64encode
 from sicds.base import DocStore, StoreError
 
 class CouchStore(DocStore):
-    KEYDOCID = u'keys'
     LOGDESIGNDOCID = u'log'
     LOG_VIEW_NAME = u'entries'
     LOG_VIEW_CODE = u'''
@@ -44,7 +43,7 @@ function (doc) {{
             self.server.create(self.dbid)
         self.db = self.server[self.dbid]
         if fresh:
-            self.db[self.KEYDOCID] = {self.kKEYS: []}
+            self.db[self.KEYSDOCID] = {self.kKEYS: []}
         from couchdb.design import ViewDefinition
         self._log_view = ViewDefinition(self.LOGDESIGNDOCID,
             self.LOG_VIEW_NAME, self.LOG_VIEW_CODE)
@@ -59,17 +58,17 @@ function (doc) {{
         return all(successful for (successful, id, rev_exc) in results)
 
     def register_key(self, newkey):
-        keydoc = self.db[self.KEYDOCID]
-        currkeys = keydoc[self.kKEYS]
+        keysdoc = self.db[self.KEYSDOCID]
+        currkeys = keysdoc[self.kKEYS]
         if newkey in currkeys:
             return False
         currkeys.append(newkey)
-        keydoc[self.kKEYS] = currkeys
-        self.db[self.KEYDOCID] = keydoc
+        keysdoc[self.kKEYS] = currkeys
+        self.db[self.KEYSDOCID] = keysdoc
         return True
 
     def ensure_keys(self, keys):
-        keysdoc = self.db[self.KEYDOCID]
+        keysdoc = self.db[self.KEYSDOCID]
         curkeys = keysdoc[self.kKEYS]
         newkeys = set(keys) - set(curkeys)
         if newkeys:

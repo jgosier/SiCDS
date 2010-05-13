@@ -124,14 +124,18 @@ class DocStore(BaseStore):
     Abstract base class for document-oriented stores such as CouchDB and
     MongoDB.
     '''
+    #: the id of the document storing the api keys
+    KEYSDOCID = u'keys'
     #: the key in the api-key document that maps to the keys
     kKEYS = u'keys'
+    #: the key in all documents which maps to their IDs
+    kID = u'_id'
+    #: the key in dif record documents which maps to their added time
+    kTIMEADDED = u'time_added'
 
-    @staticmethod
-    def _new_difs_record(id):#, key, difs):
+    @classmethod
+    def _new_difs_record(cls, id):
         return {
-            u'_id': id,
-            u'time_added': utcnow().isoformat(),
-            #u'key': key,
-            #u'difs': [dif.unwrap for dif in difs],
+            cls.kID: id,
+            cls.kTIMEADDED: utcnow().isoformat(),
             }

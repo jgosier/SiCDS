@@ -43,8 +43,8 @@ class MongoStore(DocStore):
         self.logc = self.db[self.cLOG]
         self.logc.ensure_index(self.LOG_INDEX)
         self.keyc = self.db[self.cKEYS]
-        if not self.keyc.find_one():
-            self.keyc.insert({self.kKEYS: []})
+        if not self.keyc.find_one({self.kID: self.KEYSDOCID}):
+            self.keyc.insert({self.kID: self.KEYSDOCID, self.kKEYS: []})
         self.difc = self.db[self.cDIFS]
 
     @classmethod
@@ -63,7 +63,7 @@ class MongoStore(DocStore):
         return uniq
 
     def register_key(self, newkey):
-        keysdoc = self.keyc.find_one()
+        keysdoc = self.keyc.find_one({self.kID: self.KEYSDOCID})
         curkeys = keysdoc[self.kKEYS]
         if newkey in curkeys:
             return False
@@ -73,7 +73,7 @@ class MongoStore(DocStore):
         return True
 
     def ensure_keys(self, keys):
-        keysdoc = self.keyc.find_one()
+        keysdoc = self.keyc.find_one({self.kID: self.KEYSDOCID})
         curkeys = keysdoc[self.kKEYS]
         newkeys = set(keys) - set(curkeys)
         if newkeys:
