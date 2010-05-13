@@ -18,12 +18,28 @@
 # Boston, MA  02110-1301
 # USA
 
+from itertools import imap
+from operator import attrgetter, itemgetter
 from base64 import urlsafe_b64encode
 from sicds.base import DocStore
 
 class CouchStore(DocStore):
-    LOGDESIGNDOCID = u'log'
-    LOG_VIEW_NAME = u'entries'
+    #: the key in api key documents that maps to the api key
+    kAPIKEY = u'apikey'
+
+    #: the id of the design doc specifying the view for api keys
+    APIKEYS_DDOCID = u'apikeys'
+    APIKEYS_VIEW_NAME = u'all'
+    APIKEYS_VIEW_CODE = u'''
+function (doc) {{
+  if (doc.{0})
+    emit(doc.{0}, null);
+}}
+'''.format(kAPIKEY)
+
+    #: the id of the design doc specifying the view for log records
+    LOG_DDOCID = u'log'
+    LOG_VIEW_NAME = u'by_{0}'.format(DocStore.LOG_INDEX)
     LOG_VIEW_CODE = u'''
 function (doc) {{
   if (doc.{0})
@@ -38,16 +54,16 @@ function (doc) {{
         self._bootstrap()
 
     def _bootstrap(self):
-        fresh = self.dbid not in self.server
-        if fresh:
+        if self.dbid not in self.server:
             self.server.create(self.dbid)
         self.db = self.server[self.dbid]
-        if fresh:
-            self.db[self.KEYSDOCID] = {self.kKEYS: []}
         from couchdb.design import ViewDefinition
-        self._log_view = ViewDefinition(self.LOGDESIGNDOCID,
+        self.apikeys_view = ViewDefinition(self.APIKEYS_DDOCID,
+            self.APIKEYS_VIEW_NAME, self.APIKEYS_VIEW_CODE)
+        self.log_view = ViewDefinition(self.LOG_DDOCID,
             self.LOG_VIEW_NAME, self.LOG_VIEW_CODE)
-        self._log_view.sync(self.db)
+        self.apikeys_view.sync(self.db)
+        self.log_view.sync(self.db)
 
     @staticmethod
     def _hash(key, difs):
@@ -58,24 +74,15 @@ function (doc) {{
         return all(successful for (successful, id, rev_exc) in results)
 
     def register_key(self, newkey):
-        keysdoc = self.db[self.KEYSDOCID]
-        currkeys = keysdoc[self.kKEYS]
-        if newkey in currkeys:
+        if list(self.apikeys_view(self.db, key=newkey)):
             return False
-        currkeys.append(newkey)
-        keysdoc[self.kKEYS] = currkeys
-        self.db.save(keysdoc)
+        self.db.save({self.kAPIKEY: newkey})
         return True
 
     def ensure_keys(self, keys):
-        keysdoc = self.db[self.KEYSDOCID]
-        curkeys = keysdoc[self.kKEYS]
-        newkeys = set(keys) - set(curkeys)
-        if newkeys:
-            curkeys.extend(newkeys)
-            keysdoc[self.kKEYS] = curkeys
-            self.db.save(keysdoc)
-        return iter(curkeys)
+        for key in keys:
+            self.register_key(key)
+        return imap(itemgetter('key'), self.apikeys_view(self.db))
 
     def clear(self):
         if self.dbid in self.server:
@@ -84,3 +91,7 @@ function (doc) {{
 
     def _add_log_record(self, record):
         self.db.save(record)
+
+    def iterlog(self):
+        return imap(attrgetter('doc'),
+            self.log_view(self.db, include_docs=True))

@@ -80,3 +80,6 @@ class MongoStore(DocStore):
 
     def _add_log_record(self, record):
         self.logc.insert(record)
+
+    def iterlog(self):
+        return self.logc.find()

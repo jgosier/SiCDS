@@ -21,7 +21,6 @@
 from datetime import datetime
 from functools import partial
 from hashlib import sha1
-from itertools import imap
 from operator import attrgetter
 utcnow = datetime.utcnow
 
@@ -124,10 +123,6 @@ class DocStore(BaseStore):
     Abstract base class for document-oriented stores such as CouchDB and
     MongoDB.
     '''
-    #: the id of the document storing the api keys
-    KEYSDOCID = u'keys'
-    #: the key in the api-key document that maps to the keys
-    kKEYS = u'keys'
     #: the key in all documents which maps to their IDs
     kID = u'_id'
     #: the key in dif record documents which maps to their added time
