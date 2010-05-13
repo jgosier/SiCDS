@@ -18,6 +18,8 @@
 # Boston, MA  02110-1301
 # USA
 
+from couchdb import Server
+from couchdb.design import ViewDefinition
 from itertools import imap
 from operator import attrgetter, itemgetter
 from base64 import urlsafe_b64encode
@@ -48,7 +50,6 @@ function (doc) {{
 '''.format(DocStore.LOG_INDEX)
 
     def __init__(self, url):
-        from couchdb import Server
         self.server = Server('http://{0}'.format(url.netloc))
         self.dbid = url.path.split('/')[1]
         self._bootstrap()
@@ -57,7 +58,6 @@ function (doc) {{
         if self.dbid not in self.server:
             self.server.create(self.dbid)
         self.db = self.server[self.dbid]
-        from couchdb.design import ViewDefinition
         self.apikeys_view = ViewDefinition(self.APIKEYS_DDOCID,
             self.APIKEYS_VIEW_NAME, self.APIKEYS_VIEW_CODE)
         self.log_view = ViewDefinition(self.LOG_DDOCID,

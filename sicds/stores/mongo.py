@@ -20,6 +20,8 @@
 
 from itertools import imap
 from operator import itemgetter
+from pymongo import Connection
+from pymongo.binary import Binary
 from sicds.base import DocStore
 
 class MongoStore(DocStore):
@@ -31,9 +33,6 @@ class MongoStore(DocStore):
     cDIFS = u'difs'
 
     def __init__(self, url):
-        from pymongo import Connection
-        from pymongo.binary import Binary
-        self.__class__.Binary = Binary
         host = url.hostname
         port = url.port
         self.conn = Connection(host=host, port=port)
@@ -47,9 +46,9 @@ class MongoStore(DocStore):
         self.keyc = self.db[self.cKEYS]
         self.difc = self.db[self.cDIFS]
 
-    @classmethod
-    def _hash(cls, key, difs):
-        return cls.Binary(DocStore._hash(key, difs))
+    @staticmethod
+    def _hash(key, difs):
+        return Binary(DocStore._hash(key, difs))
 
     def _add_difs_records(self, records):
         # mongodb does not yet support bulk insert of docs with potentially

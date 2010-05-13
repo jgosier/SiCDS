@@ -19,12 +19,10 @@
 # Boston, MA  02110-1301
 # USA
 
-from sicds.base import UrlInitable
-from sicds.loggers import NullLogger, FileLogger, StdOutLogger
+from sicds.loggers import StdOutLogger
 from sicds.schema import Reference, Schema, SchemaError, many, \
     withdefault, t_uni
-from sicds.stores import TmpStore, CouchStore, MongoStore
-from urlparse import urlsplit
+from urlparse import urlparse
 
 DEFAULTCONFIG = dict(
     host='localhost',
@@ -35,14 +33,14 @@ DEFAULTCONFIG = dict(
     )
 
 STORES = {
-    'tmp': TmpStore,
-    'couchdb': CouchStore,
-    'mongodb': MongoStore,
+    'tmp': 'sicds.stores.tmp.TmpStore',
+    'couchdb': 'sicds.stores.couch.CouchStore',
+    'mongodb': 'sicds.stores.mongo.MongoStore',
     }
 
 LOGGERS = {
-    'null': NullLogger,
-    'file': FileLogger,
+    'null': 'sicds.loggers.NullLogger',
+    'file': 'sicds.loggers.FileLogger',
     'store': Reference('store'), # use whatever was configured as the store
     }
 
@@ -55,28 +53,30 @@ def _instance_from_url(url, urlscheme2type):
     Returns a new UrlInitable object designated by the given url and
     urlscheme2type mapping.
 
-        >>> null_logger = _instance_from_url('null:', LOGGERS)
-        >>> isinstance(null_logger, NullLogger)
-        True
+        >>> filelogger = _instance_from_url('file:///dev/stdout',
+        ...     {'file': 'sicds.loggers.FileLogger'})
+        >>> filelogger.log
+        <bound method FileLogger.log of ...>
 
     '''
-    # assume urlsplit correctly handles novel schemes
-    # this requires at least Python 2.6.5!
+    # assume urlparse correctly handles novel schemes
+    # this requires at least Python 2.6.5
     # see http://bugs.python.org/issue7904
-    url = urlsplit(url)
-    scheme = url.scheme
+    parsedurl = urlparse(url)
+    scheme = parsedurl.scheme
     try:
         try:
-            Class = urlscheme2type[scheme]
+            name = urlscheme2type[scheme]
         except KeyError:
             raise UnknownUrlScheme(scheme)
-        if isinstance(Class, Reference):
-            return Class
-        try:
-            assert issubclass(Class, UrlInitable)
-        except:
-            print('Warning: {0} is not a UrlInitable'.format(Class))
-        return Class(url)
+        if isinstance(name, Reference):
+            return name
+        modulename, factory = name.rsplit('.', 1)
+        module = __import__(modulename)
+        for component in modulename.split('.')[1:]:
+            module = getattr(module, component)
+        factory = getattr(module, factory)
+        return factory(parsedurl)
     except:
         raise UrlInitFailure(url) 
 
