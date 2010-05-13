@@ -18,12 +18,14 @@
 # Boston, MA  02110-1301
 # USA
 
+from itertools import imap
+from operator import itemgetter
 from sicds.base import DocStore
 
 class MongoStore(DocStore):
     #: the name of the collection that stores log entries
     cLOG = u'logentries'
-    #: the name of the collection that stores the single api-keys document
+    #: the name of the collection that stores api keys documents
     cKEYS = u'keys'
     #: the name of the collection that stores the dif documents
     cDIFS = u'difs'
@@ -43,8 +45,6 @@ class MongoStore(DocStore):
         self.logc = self.db[self.cLOG]
         self.logc.ensure_index(self.LOG_INDEX)
         self.keyc = self.db[self.cKEYS]
-        if not self.keyc.find_one({self.kID: self.KEYSDOCID}):
-            self.keyc.insert({self.kID: self.KEYSDOCID, self.kKEYS: []})
         self.difc = self.db[self.cDIFS]
 
     @classmethod
@@ -63,24 +63,16 @@ class MongoStore(DocStore):
         return uniq
 
     def register_key(self, newkey):
-        keysdoc = self.keyc.find_one({self.kID: self.KEYSDOCID})
-        curkeys = keysdoc[self.kKEYS]
-        if newkey in curkeys:
+        try:
+            self.keyc.insert({self.kID: newkey}, check_keys=False, safe=True)
+            return True
+        except:
             return False
-        curkeys.append(newkey)
-        keysdoc[self.kKEYS] = curkeys
-        self.keyc.save(keysdoc, safe=True)
-        return True
 
     def ensure_keys(self, keys):
-        keysdoc = self.keyc.find_one({self.kID: self.KEYSDOCID})
-        curkeys = keysdoc[self.kKEYS]
-        newkeys = set(keys) - set(curkeys)
-        if newkeys:
-            curkeys.extend(newkeys)
-            keysdoc[self.kKEYS] = curkeys
-            self.keyc.save(keysdoc, safe=True)
-        return iter(curkeys)
+        for key in keys:
+            self.register_key(key)
+        return imap(itemgetter(self.kID), self.keyc.find())
 
     def clear(self):
         self.conn.drop_database(self.db)
