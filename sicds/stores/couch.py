@@ -19,7 +19,7 @@
 # USA
 
 from base64 import urlsafe_b64encode
-from sicds.base import DocStore, StoreError
+from sicds.base import DocStore
 
 class CouchStore(DocStore):
     LOGDESIGNDOCID = u'log'
@@ -64,7 +64,7 @@ function (doc) {{
             return False
         currkeys.append(newkey)
         keysdoc[self.kKEYS] = currkeys
-        self.db[self.KEYSDOCID] = keysdoc
+        self.db.save(keysdoc)
         return True
 
     def ensure_keys(self, keys):
@@ -74,9 +74,7 @@ function (doc) {{
         if newkeys:
             curkeys.extend(newkeys)
             keysdoc[self.kKEYS] = curkeys
-            successful, id, exc = self.db.update([keysdoc])[0]
-            if not successful:
-                raise StoreError({id: exc})
+            self.db.save(keysdoc)
         return iter(curkeys)
 
     def clear(self):
