@@ -23,7 +23,6 @@ from collections import namedtuple
 from functools import partial
 from itertools import count
 from json import dumps, loads
-from pprint import pformat
 from re import compile
 from sys import stdout
 from webob import exc
@@ -32,7 +31,6 @@ from webtest import TestApp
 from sicds.app import SiCDSApp, IDRequest, IDResult, IDResponse, \
     KeyRegRequest, KeyRegResponse
 from sicds.config import SiCDSConfig, UrlInitFailure
-from sicds.loggers import TmpLogger
 from sicds.shell import startshell
 
 TESTKEY = 'test_key'
@@ -183,7 +181,7 @@ testcases.append(tc_too_large)
 
 
 npassed = nfailed = 0
-FailureEnv = namedtuple('FailureEnv', 'storetype failures config app log')
+FailureEnv = namedtuple('FailureEnv', 'storetype failures config app')
 failed_envs = []
 for config in testconfigs:
     try:
@@ -193,8 +191,6 @@ for config in testconfigs:
         print('Skipping...')
         continue
     config.store.clear()
-    tmplogger = TmpLogger()
-    config.loggers.append(tmplogger)
     storetype = config.store.__class__.__name__
     stdout.write('{0}:\t'.format(storetype))
     app = SiCDSApp(config.superkey, config.store, config.loggers, keys=config.keys)
@@ -215,9 +211,9 @@ for config in testconfigs:
             stdout.write('.')
         stdout.flush()
     stdout.write('\n')
+
     if failures:
-        failed_envs.append(FailureEnv(storetype, failures, config, app,
-            list(tmplogger.iterlog())))
+        failed_envs.append(FailureEnv(storetype, failures, config, app))
 
 print('\n{0} test(s) passed, {1} failed.'.format(npassed, nfailed))
 
@@ -229,7 +225,7 @@ def indented(text, indent=' '*6, width=60, collapse_whitespace=True):
 
 if failed_envs:
     print('\nFailure summary:')
-    for storetype, failures, _, _, _ in failed_envs:
+    for storetype, failures, _, _ in failed_envs:
         print('\n  For {0}:'.format(storetype))
         for i, tc in failures.iteritems():
             print('\n    test {0}: "{1}"'.format(i, tc.desc))
