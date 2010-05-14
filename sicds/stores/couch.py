@@ -26,19 +26,6 @@ from base64 import urlsafe_b64encode
 from sicds.base import DocStore
 
 class CouchStore(DocStore):
-    #: the key in api key documents that maps to the api key
-    kAPIKEY = u'apikey'
-
-    #: the id of the design doc specifying the view for api keys
-    APIKEYS_DDOCID = u'apikeys'
-    APIKEYS_VIEW_NAME = u'all'
-    APIKEYS_VIEW_CODE = u'''
-function (doc) {{
-  if (doc.{0})
-    emit(doc.{0}, null);
-}}
-'''.format(kAPIKEY)
-
     #: the id of the design doc specifying the view for log records
     LOG_DDOCID = u'log'
     LOG_VIEW_NAME = u'by_{0}'.format(DocStore.LOG_INDEX)
@@ -52,17 +39,18 @@ function (doc) {{
     def __init__(self, url):
         self.server = Server('http://{0}'.format(url.netloc))
         self.dbid = url.path.split('/')[1]
+        self.keydbid = self.dbid + '_keys'
         self._bootstrap()
 
     def _bootstrap(self):
         if self.dbid not in self.server:
             self.server.create(self.dbid)
+        if self.keydbid not in self.server:
+            self.server.create(self.keydbid)
         self.db = self.server[self.dbid]
-        self.apikeys_view = ViewDefinition(self.APIKEYS_DDOCID,
-            self.APIKEYS_VIEW_NAME, self.APIKEYS_VIEW_CODE)
+        self.keydb = self.server[self.keydbid]
         self.log_view = ViewDefinition(self.LOG_DDOCID,
             self.LOG_VIEW_NAME, self.LOG_VIEW_CODE)
-        self.apikeys_view.sync(self.db)
         self.log_view.sync(self.db)
 
     @staticmethod
@@ -74,19 +62,22 @@ function (doc) {{
         return all(successful for (successful, id, rev_exc) in results)
 
     def register_key(self, newkey):
-        if list(self.apikeys_view(self.db, key=newkey)):
+        try:
+            self.keydb[newkey] = {}
+        except:
             return False
-        self.db.save({self.kAPIKEY: newkey})
         return True
 
     def ensure_keys(self, keys):
         for key in keys:
             self.register_key(key)
-        return imap(itemgetter('key'), self.apikeys_view(self.db))
+        return imap(attrgetter('id'), self.keydb.view('_all_docs'))
 
     def clear(self):
         if self.dbid in self.server:
             del self.server[self.dbid]
+        if self.keydbid in self.server:
+            del self.server[self.keydbid]
         self._bootstrap()
 
     def _add_log_record(self, record):

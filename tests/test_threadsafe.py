@@ -19,6 +19,7 @@
 # Boston, MA  02110-1301
 # USA
 
+from couchdb.http import ResourceConflict
 from pymongo.errors import DuplicateKeyError
 from sicds.app import Dif
 from sicds.config import store_from_url
@@ -37,7 +38,7 @@ class TestThreadsafeCouch(TestCase):
         couch = self.couch
         # couch inserts records in bulk
         def insert(records):
-            return self.couch.db.update(records)
+            return couch.db.update(records)
         key = u'key'
         dif1 = Dif(type='type1', value='value1')
         dif2 = Dif(type='type2', value='value2')
@@ -61,19 +62,13 @@ class TestThreadsafeCouch(TestCase):
         '''
         couch = self.couch
         def insert(key):
-            self.couch.db.save({self.couch.kAPIKEY: key})
+            couch.keydb[key] = {}
         newkey = u'newkey'
-        # request 1 asks if newkey is registered already, answer is no
-        self.assertTrue(not list(couch.apikeys_view(couch.db, key=newkey)))
-        # request 2 asks if newkey is registered already, answer is no
-        self.assertTrue(not list(couch.apikeys_view(couch.db, key=newkey)))
-        # request 1 inserts the new key
+        # request 1 tries to register newkey, succeeds
         insert(newkey)
-        # request 2 inserts the new key
-        insert(newkey)
-        # XXX This is not atomic, so this results in two documents getting
-        # created for the same key. This is harmless but incorrect.
-        self.assertTrue(len(list(couch.apikeys_view(couch.db, key=newkey))) == 1) # fails because length is 2
+        # request 2 tries to register newkey, fails
+        self.assertRaises(ResourceConflict, lambda: insert(newkey))
+        self.assertTrue(newkey in couch.keydb)
 
 class TestThreadsafeMongo(TestCase):
     def setUp(self):
