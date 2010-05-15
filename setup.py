@@ -36,9 +36,8 @@ except ImportError:
 
 version = '0.0.1dev'
 url = 'http://github.com/appfrica/SiCDS'
-desc_dir = 'docs'
 desc_filename = 'README.rst'
-desc_path = join(join(dirname(__file__), desc_dir), desc_filename)
+desc_path = join(dirname(__file__), desc_filename)
 try:
     desc_file = open(desc_path)
 except IOError:
@@ -59,6 +58,8 @@ setup(name='SiCDS',
       extras_require = {
           'CouchDB': ["CouchDB==0.7"],
           'MongoDB': ["pymongo==1.6"],
+          'Tornado': ["Tornado==0.2"],
+          'tests': ["WebTest==1.2.1"],
           },
       entry_points=dict(
           console_scripts=[

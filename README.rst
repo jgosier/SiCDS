@@ -1,4 +1,4 @@
-Swiftriver Content Duplication Service (SiCDS)
+SwiftRiver Content Duplication Service (SiCDS)
 ==============================================
 
 Overview
@@ -14,14 +14,16 @@ fields (difs). Each dif has a type and a value. Two different collections of
 difs can both uniquely identify the same content item. When asking about a
 given item, a client can therefore include several collections of difs, and if
 the client has asked about any one of them before, the item will be identified
-as duplicate. Only if none of the given dif collections has been submitted
-before will the item be identified as unique. When processing an item, if a
-recognized dif collection is encountered, any remaining dif collections will
-continue to be processed even though the item is already known to be duplicate.
-This ensures that all encountered dif collections will always be remembered.
+as duplicate. Only if the client has asked about none of the given dif
+collections before will the item be identified to it as unique.
+
+When processing an item, if a recognized dif collection is encountered, any
+remaining dif collections will continue to be processed even though the item
+is already known to be duplicate, i.e. all encountered dif collections will
+be remembered.
 
 Clients must supply an authorized API key in order to use SiCDS. New keys may
-be registered via the /register API (see below).
+be registered by clients with a superkey via the /register API (see below).
 
 
 Usage
@@ -157,11 +159,14 @@ run the file. You should see something like::
 Deployment
 ----------
 
-SiCDS is a WSGI application. As such, it should be deployable with any WSGI
-server (e.g. Apache + `mod_wsgi <http://code.google.com/p/modwsgi/>`_,
-`uWSGI <http://projects.unbit.it/uwsgi/>`_, `Tornado
-<http://www.tornadoweb.org/>`_, et al.). The server should provide further
-documentation on its configuration. You may have to write a standard WSGI
-application factory to create a configured ``SiCDSApp`` instance. The
-``main`` function in ``app.py`` provides an example using the reference WSGI
-server built into Python. SiCDS has currently only been tested with this server.
+SiCDS is a WSGI application. As such, it can be deployed with any WSGI
+server. The ``sicds.app.main`` function serves SiCDS using the basic reference
+WSGI server built into Python, but a script has also been provided to run SiCDS
+in `Tornado <http://www.tornadoweb.org/>`_ (see ``tornado_runner.py``). For
+other servers, see their accompanying documentation.
+
+
+Links
+-----
+- `http://swift.ushahidi.com/ <http://swift.ushahidi.com/>`_
+- `http://sws.ushahidi.com/ <http://sws.ushahidi.com/>`_
