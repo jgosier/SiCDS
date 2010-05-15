@@ -1,2 +1,1 @@
-include example-config.json
-recursive-include docs *.rst *.txt
+include *.json *.rst *.txt
