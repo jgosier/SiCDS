@@ -116,9 +116,9 @@ achieved with something like::
     $ sicds-env/bin/pip install -r http://github.com/jab/SiCDS/raw/master/requirements.txt
     ...
 
- Once installed, the following will launch SiCDS in a basic Python WSGI server
- listening on port 8625, with a temporary (in-memory) data store, and logging to
- stdout::
+Once installed, the following will launch SiCDS in a basic Python WSGI server
+listening on port 8625, with a temporary (in-memory) data store, and logging to
+stdout::
 
     $ sicds-env/bin/sicdsapp
 
