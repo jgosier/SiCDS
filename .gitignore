@@ -1,7 +1,7 @@
 *.pyc
 *.egg-info
 *.swp
+*.un~
 .DS_Store
 dist
 docs/build/
-config.json

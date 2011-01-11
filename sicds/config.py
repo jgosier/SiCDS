@@ -24,13 +24,12 @@ from sicds.schema import Reference, Schema, SchemaError, many, \
     withdefault, t_uni
 from urlparse import urlparse
 
-DEFAULTCONFIG = dict(
-    host='localhost',
-    port=8625,
-    keys=['sicds_default_key'],
-    superkey='sicds_default_superkey',
-    store='tmp:',
-    )
+class DEFAULTCONFIG(object):
+    host = 'localhost'
+    port = 8625
+    keys = ['sicds_default_key']
+    superkey = 'sicds_default_superkey'
+    store = 'tmp:'
 
 STORES = {
     'tmp': 'sicds.stores.tmp.TmpStore',
