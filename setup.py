@@ -52,14 +52,14 @@ setup(name='SiCDS',
       long_description=long_description,
       install_requires=[
           #'Python>=2.6.5,<3.0'
-          'WebOb==0.9.8',
-          'simplejson==2.1.1',
+          'WebOb>=0.9.8',
+          'simplejson>=2.1.1',
           ],
       extras_require = {
-          'CouchDB': ["CouchDB==0.7"],
-          'MongoDB': ["pymongo==1.6"],
-          'Tornado': ["Tornado==0.2"],
-          'tests': ["WebTest==1.2.1"],
+          'CouchDB': ["CouchDB>=0.7"],
+          'MongoDB': ["pymongo>=1.6"],
+          'Tornado': ["Tornado>=0.2"],
+          'tests': ["WebTest>=1.2.1"],
           },
       entry_points=dict(
           console_scripts=[

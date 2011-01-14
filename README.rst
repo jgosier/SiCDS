@@ -103,9 +103,9 @@ bytes). Such a request will result in a 413 Request Entity Too Large response.
 Requirements and Installation
 -----------------------------
 
-- `Python 2.6.5 <http://www.python.org/download/releases/2.6.5/>`_
-- `WebOb 0.9.8 <http://pypi.python.org/pypi/WebOb/0.9.8>`_
-- `simplejson 2.1.1 <http://pypi.python.org/pypi/simplejson/2.1.1>`_
+- `Python <http://www.python.org/download/releases/>`_ >= 2.6.5, < 3
+- `WebOb <http://pypi.python.org/pypi/WebOb>`_ >= 0.9.8
+- `simplejson <http://pypi.python.org/pypi/simplejson>`_ >= 2.1.1
 
 It is recommended that you install SiCDS inside a `virtualenv
 <http://pypi.python.org/pypi/virtualenv>`_. This can be most easily
