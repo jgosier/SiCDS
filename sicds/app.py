@@ -207,7 +207,6 @@ def getconfig():
         except ImportError:
             die('Could not import {0}'.format(configpath))
     else:
-        import doctest; doctest.testmod(optionflags=doctest.ELLIPSIS)
         config = DEFAULTCONFIG
         print('Warning: Using default configuration. Data will not be persisted.')
     return SiCDSConfig(config)

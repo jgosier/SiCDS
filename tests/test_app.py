@@ -33,6 +33,16 @@ from sicds.app import SiCDSApp, IDRequest, IDResult, IDResponse, \
 from sicds.config import SiCDSConfig, UrlInitFailure
 from sicds.shell import startshell
 
+# first run doctests
+import doctest
+import sicds.app
+import sicds.config
+import sicds.schema
+doctested = (sicds.app, sicds.config, sicds.schema)
+for m in doctested:
+    doctest.testmod(m=m, optionflags=doctest.ELLIPSIS)
+
+# now perform functional tests
 TESTKEY = 'test_key'
 TESTSUPERKEY = 'test_superkey'
 TESTPORT = 8635
