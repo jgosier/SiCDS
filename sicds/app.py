@@ -198,13 +198,14 @@ def getconfig():
 
     if argv[1:]:
         configpath = argv[1]
+        if configpath[-3:] != '.py':
+            die('Config file must end in .py')
         try:
-            with open(configpath) as configfile:
-                config = load(configfile)
-        except JSONDecodeError:
-            die('Could not parse configuration json')
-        except IOError:
-            die('Could not open file {0}'.format(configpath))
+            config = __import__(configpath[:-3])
+        except SyntaxError:
+            die('Syntax error in config file')
+        except ImportError:
+            die('Could not import {0}'.format(configpath))
     else:
         import doctest; doctest.testmod(optionflags=doctest.ELLIPSIS)
         config = DEFAULTCONFIG

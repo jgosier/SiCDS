@@ -123,8 +123,8 @@ stdout::
     $ sicds-env/bin/sicdsapp
 
 
-Pass in a configuration file in `JSON <http://www.json.org/>`_ format to change
-any of these settings. See ``example-config.json`` for examples.
+Pass in a configuration file to change any of these settings. See
+``example-config.py`` for examples.
 
 SiCDS is intended to be configured to use a persistent data store so that the
 data survive restarts. Currently the following stores are supported:
@@ -136,7 +136,7 @@ data survive restarts. Currently the following stores are supported:
 
 Run "pip install {CouchDB, pymongo}" to install the Python drivers for the
 data store you'd like to use, and point SiCDS to a corresponding running
-store in your config.json (e.g. "store": "couchdb://localhost:5984/sicds_dev").
+store in your config.py (e.g. store="couchdb://localhost:5984/sicds_dev").
 On next launch SiCDS will use the configured backend, creating the specified
 database (e.g. "sicds_dev") in it if it doesn't exist already.
 

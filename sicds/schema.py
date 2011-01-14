@@ -151,6 +151,22 @@ class Schema(object):
         >>> ContactInfo(info.unwrap) == info
         True
 
+    You can instantiate schema instances like you instantiate a dict::
+
+        >>> (Name({'first': 'Homer', 'last': 'Simpson'}) ==
+        ... Name([('first', 'Homer'), ('last', 'Simpson')]) ==
+        ... Name({'first': 'Homer'}, last='Simpson'))
+        True
+
+    Or pass in a single positional parameter with a __dict__ attribute
+    (e.g. a class or module)::
+
+        >>> class DEFAULTNAME:
+        ...     first = '(first)'
+        ...     last = '(last)'
+        >>> Name(DEFAULTNAME)
+        <Name first='(first)' last='(last)'>
+
     '''
     required = {}
     optional = {}
@@ -168,7 +184,11 @@ class Schema(object):
         return value
 
     def __init__(self, *args, **kw):
-        values = dict(*args, **kw)
+        if len(args) == 1 and not kw and hasattr(args[0], '__dict__'):
+            values = dict((k, v) for (k, v) in args[0].__dict__.iteritems()
+                if not k.startswith('__'))
+        else:
+            values = dict(*args, **kw)
         for field, validator in chain(
                 self.required.iteritems(), self.optional.iteritems()):
             try:
