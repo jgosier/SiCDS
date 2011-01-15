@@ -34,7 +34,7 @@ Here is an example request::
     curl http://SiCDS/ -d '{"key": "client1",
         "contentItems": [
             {"id": "item1", "difcollections": [
-                {"name": "names":, "difs": [
+                {"name": "names", "difs": [
                     {"type": "first", "value": "Homer"},
                     {"type": "last", "value": "Simpson"}
                     ]
