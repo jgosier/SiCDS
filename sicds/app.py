@@ -198,14 +198,13 @@ def getconfig():
 
     if argv[1:]:
         configpath = argv[1]
-        if configpath[-3:] != '.py':
-            die('Config file must end in .py')
+        config = {}
         try:
-            config = __import__(configpath[:-3])
+            execfile(configpath, {}, config)
         except SyntaxError:
-            die('Syntax error in config file')
-        except ImportError:
-            die('Could not import {0}'.format(configpath))
+            die('Syntax error in config file {0}'.format(configpath))
+        except IOError:
+            die('No such file {0}'.format(configpath))
     else:
         config = DEFAULTCONFIG
         print('Warning: Using default configuration. Data will not be persisted.')
