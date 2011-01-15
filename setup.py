@@ -65,6 +65,7 @@ setup(name='SiCDS',
           console_scripts=[
               'sicdsapp = sicds.app:main',
               'sicdsshell = sicds.shell:main',
+              'sicdstornado = tornado_runner:main',
               ]
           ),
       classifiers=[
