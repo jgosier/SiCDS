@@ -167,6 +167,11 @@ class Schema(object):
         >>> Name(DEFAULTNAME)
         <Name first='(first)' last='(last)'>
 
+    In which case, keyword arguments can still be used and will override::
+
+        >>> Name(DEFAULTNAME, last='Simpson')
+        <Name first='(first)' last='Simpson'>
+
     '''
     required = {}
     optional = {}
@@ -184,11 +189,10 @@ class Schema(object):
         return value
 
     def __init__(self, *args, **kw):
-        if len(args) == 1 and not kw and hasattr(args[0], '__dict__'):
-            values = dict((k, v) for (k, v) in args[0].__dict__.iteritems()
-                if not k.startswith('__'))
-        else:
-            values = dict(*args, **kw)
+        if args and hasattr(args[0], '__dict__'):
+            args = (((k, v) for (k, v) in args[0].__dict__.iteritems()
+                if not k.startswith('__')),)
+        values = dict(*args, **kw)
         for field, validator in chain(
                 self.required.iteritems(), self.optional.iteritems()):
             try:
